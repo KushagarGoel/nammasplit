@@ -2,6 +2,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Users, UserPlus, Activity, Plus } from 'lucide-react';
 import { useState } from 'react';
 import AddExpenseModal from './AddExpenseModal';
+import { useApp } from '../context/AppContext';
 
 const NAV_ITEMS = [
     { path: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -14,7 +15,16 @@ const NAV_ITEMS = [
 export default function BottomNav() {
     const location = useLocation();
     const navigate = useNavigate();
+    const { friends, showToast } = useApp();
     const [showAddExpense, setShowAddExpense] = useState(false);
+
+    const handleAddExpenseClick = () => {
+        if (friends.length === 0) {
+            showToast('Add friends first to create an expense');
+            return;
+        }
+        setShowAddExpense(true);
+    };
 
     return (
         <>
@@ -25,7 +35,7 @@ export default function BottomNav() {
                             <button
                                 key="add"
                                 className="bottom-nav-add"
-                                onClick={() => setShowAddExpense(true)}
+                                onClick={handleAddExpenseClick}
                                 aria-label="Add expense"
                             >
                                 <Plus strokeWidth={2.5} />

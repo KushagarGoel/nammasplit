@@ -13,7 +13,7 @@ export default function Layout() {
             <header className="top-bar">
                 <div className="top-bar-logo" onClick={() => navigate('/')}>
                     <IndianRupee size={22} />
-                    HisaabKitaab
+                    NammaSplit
                 </div>
                 <div
                     className="top-bar-avatar"

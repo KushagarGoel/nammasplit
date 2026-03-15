@@ -10,14 +10,25 @@ const groupsCol = () => collection(db, 'groups');
 const expensesCol = () => collection(db, 'expenses');
 const settlementsCol = () => collection(db, 'settlements');
 const activitiesCol = () => collection(db, 'activities');
+const invitationsCol = () => collection(db, 'invitations');
 
 // ===== USER =====
-export async function createUserProfile(uid, data) {
-    await setDoc(doc(db, 'users', uid), {
-        ...data,
-        uid,
-        createdAt: new Date().toISOString(),
-    });
+export async function createUserProfile(uid, data, retryCount = 0) {
+    try {
+        await setDoc(doc(db, 'users', uid), {
+            ...data,
+            uid,
+            createdAt: new Date().toISOString(),
+        });
+    } catch (err) {
+        // Retry up to 3 times with delay to allow auth token to propagate
+        if (retryCount < 3 && err.code === 'permission-denied') {
+            console.log(`Profile creation failed, retrying... (${retryCount + 1}/3)`);
+            await new Promise(resolve => setTimeout(resolve, 500 * (retryCount + 1)));
+            return createUserProfile(uid, data, retryCount + 1);
+        }
+        throw err;
+    }
 }
 
 export async function getUserProfile(uid) {
@@ -36,8 +47,9 @@ export async function getUserByEmail(email) {
 // ===== FRIENDS =====
 // Friends are stored as a subcollection: users/{uid}/friends/{friendId}
 export async function addFriendLink(uid, friendId) {
+    // Only create link from current user's side to avoid permission issues
+    // The friend link is one-way; queries check both directions
     await setDoc(doc(db, 'users', uid, 'friends', friendId), { addedAt: new Date().toISOString() });
-    await setDoc(doc(db, 'users', friendId, 'friends', uid), { addedAt: new Date().toISOString() });
 }
 
 export async function getFriendIds(uid) {
@@ -52,6 +64,10 @@ export async function saveGroup(group) {
 
 export async function updateGroup(groupId, data) {
     await updateDoc(doc(db, 'groups', groupId), data);
+}
+
+export async function removeGroup(groupId) {
+    await deleteDoc(doc(db, 'groups', groupId));
 }
 
 // ===== EXPENSES =====
@@ -82,8 +98,7 @@ export async function saveActivity(activity) {
  * Subscribe to all data relevant to a user.
  * Returns an unsubscribe function.
  */
-export function subscribeToUserData(uid, friendIds, onData) {
-    const allUserIds = [uid, ...friendIds];
+export function subscribeToUserData(uid, onData) {
     const unsubs = [];
 
     let currentData = {
@@ -98,27 +113,29 @@ export function subscribeToUserData(uid, friendIds, onData) {
         onData({ ...currentData });
     }
 
-    // Listen to friend profiles
-    if (friendIds.length > 0) {
-        // Firestore 'in' queries limited to 30 items, batch if needed
-        const batches = [];
-        for (let i = 0; i < friendIds.length; i += 30) {
-            batches.push(friendIds.slice(i, i + 30));
+    // Listen to friends subcollection for real-time updates
+    const friendsSubCol = collection(db, 'users', uid, 'friends');
+    unsubs.push(onSnapshot(friendsSubCol, async (friendsSnap) => {
+        const friendIds = friendsSnap.docs.map(d => d.id);
+
+        // Fetch friend profiles
+        if (friendIds.length > 0) {
+            const batches = [];
+            for (let i = 0; i < friendIds.length; i += 30) {
+                batches.push(friendIds.slice(i, i + 30));
+            }
+            const friendProfiles = [];
+            for (const batch of batches) {
+                const q = query(usersCol(), where('__name__', 'in', batch));
+                const snap = await getDocs(q);
+                friendProfiles.push(...snap.docs.map(d => ({ id: d.id, ...d.data() })));
+            }
+            currentData.friends = friendProfiles;
+        } else {
+            currentData.friends = [];
         }
-        for (const batch of batches) {
-            const q = query(usersCol(), where('__name__', 'in', batch));
-            unsubs.push(onSnapshot(q, snap => {
-                const friends = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                // Merge with existing friends from other batches
-                const existingIds = new Set(friends.map(f => f.id));
-                currentData.friends = [
-                    ...currentData.friends.filter(f => !existingIds.has(f.id)),
-                    ...friends,
-                ];
-                emit();
-            }));
-        }
-    }
+        emit();
+    }));
 
     // Listen to groups where user is a member
     const groupQ = query(groupsCol(), where('members', 'array-contains', uid));
@@ -378,4 +395,29 @@ export async function seedDataForUser(uid, userName, userEmail) {
     }
 
     await batch.commit();
+}
+
+// ===== INVITATIONS =====
+// Store pending friend invitations by email
+export async function createInvitation(fromUserId, toEmail, friendName) {
+    const normalizedEmail = toEmail.toLowerCase().trim();
+    await setDoc(doc(db, 'invitations', `${fromUserId}_${normalizedEmail}`), {
+        fromUserId,
+        toEmail: normalizedEmail,
+        friendName,
+        createdAt: new Date().toISOString(),
+    });
+}
+
+// Get pending invitations for an email address
+export async function getInvitationsForEmail(email) {
+    const normalizedEmail = email.toLowerCase().trim();
+    const q = query(invitationsCol(), where('toEmail', '==', normalizedEmail));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+// Delete an invitation after processing
+export async function deleteInvitation(invitationId) {
+    await deleteDoc(doc(db, 'invitations', invitationId));
 }

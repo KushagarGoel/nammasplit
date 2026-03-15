@@ -12,7 +12,7 @@ const SPLIT_TYPES = [
 ];
 
 export default function AddExpenseModal({ onClose, preselectedGroupId = null, editingExpense = null }) {
-    const { currentUser, friends, groups, addExpense, editExpense, getUserById } = useApp();
+    const { currentUser, friends, groups, addExpense, editExpense, getUserById, showToast } = useApp();
 
     const isEditing = !!editingExpense;
 
@@ -118,8 +118,24 @@ export default function AddExpenseModal({ onClose, preselectedGroupId = null, ed
         }
     };
 
+    const validateSplits = () => {
+        const totalAmount = parseFloat(amount) || 0;
+        if (splitType === 'equal' || splitType === 'shares') return true;
+
+        const splits = computeSplits();
+        const splitsTotal = splits.reduce((sum, s) => sum + s.amount, 0);
+        const tolerance = 0.01; // Allow 1 cent rounding difference
+
+        if (Math.abs(splitsTotal - totalAmount) > tolerance) {
+            showToast(`Split amounts must equal total. Current: ₹${splitsTotal.toFixed(2)}, Expected: ₹${totalAmount.toFixed(2)}`);
+            return false;
+        }
+        return true;
+    };
+
     const handleSubmit = async () => {
         if (!amount || parseFloat(amount) <= 0 || selectedParticipants.length < 2) return;
+        if (!validateSplits()) return;
         setSubmitting(true);
 
         try {
@@ -162,6 +178,19 @@ export default function AddExpenseModal({ onClose, preselectedGroupId = null, ed
                 </div>
 
                 <div className="modal-body">
+                    {/* No friends warning */}
+                    {!isEditing && friends.length === 0 && groups.length === 0 && (
+                        <div style={{
+                            padding: 'var(--space-md)',
+                            background: 'var(--negative-bg)',
+                            borderRadius: 'var(--radius-md)',
+                            marginBottom: 'var(--space-md)',
+                            color: 'var(--negative)',
+                            fontSize: '0.9rem',
+                        }}>
+                            You need to add friends or create a group before creating an expense.
+                        </div>
+                    )}
                     {/* Amount */}
                     <div className="form-group">
                         <label className="form-label">Amount (₹)</label>
@@ -197,7 +226,7 @@ export default function AddExpenseModal({ onClose, preselectedGroupId = null, ed
                             onChange={e => handleGroupChange(e.target.value)}
                             disabled={isEditing}
                         >
-                            <option value="">No group (split with friends)</option>
+                            <option value="">No group (Miscellaneous)</option>
                             {groups.map(g => (
                                 <option key={g.id} value={g.id}>{g.name}</option>
                             ))}
@@ -378,6 +407,7 @@ export default function AddExpenseModal({ onClose, preselectedGroupId = null, ed
                         className="btn btn-primary flex-1"
                         onClick={handleSubmit}
                         disabled={submitting || !amount || parseFloat(amount) <= 0 || selectedParticipants.length < 2}
+                        style={(submitting || !amount || parseFloat(amount) <= 0 || selectedParticipants.length < 2) ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
                     >
                         <Check size={18} />
                         {submitting ? 'Saving...' : isEditing ? 'Save Changes' : 'Add Expense'}

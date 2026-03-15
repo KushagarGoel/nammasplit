@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, HandCoins, ReceiptText, UserPlus } from 'lucide-react';
+import { ArrowLeft, Plus, HandCoins, ReceiptText, UserPlus, Trash2, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { formatINR } from '../utils/currency';
 import { getInitials, getAvatarColor } from '../utils/helpers';
@@ -11,11 +11,12 @@ import SettleUpModal from '../components/SettleUpModal';
 export default function GroupDetail() {
     const { id } = useParams();
     const navigate = useNavigate();
-    const { getGroupById, getExpensesByGroup, getGroupBalanceDetails, getGroupSimplifiedDebts, getUserById, currentUser, friends, addMemberToGroup } = useApp();
+    const { getGroupById, getExpensesByGroup, getGroupBalanceDetails, getGroupSimplifiedDebts, getUserById, currentUser, friends, addMemberToGroup, deleteGroup } = useApp();
 
     const [showAddExpense, setShowAddExpense] = useState(false);
     const [showSettle, setShowSettle] = useState(false);
     const [showAddMember, setShowAddMember] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [activeTab, setActiveTab] = useState('expenses');
     const [editingExpense, setEditingExpense] = useState(null);
 
@@ -53,6 +54,11 @@ export default function GroupDetail() {
         setEditingExpense(null);
     };
 
+    const handleDeleteGroup = async () => {
+        await deleteGroup(id);
+        navigate('/groups');
+    };
+
     return (
         <div>
             <button className="back-btn" onClick={() => navigate('/groups')}>
@@ -74,14 +80,23 @@ export default function GroupDetail() {
 
             {/* Summary */}
             <div className="summary-cards" style={{ gridTemplateColumns: '1fr 1fr' }}>
-                <div className="summary-card">
-                    <div className="summary-card-label">Total Spend</div>
-                    <div className="summary-card-value neutral">{formatINR(totalSpend)}</div>
-                </div>
-                <div className="summary-card">
-                    <div className="summary-card-label">Expenses</div>
-                    <div className="summary-card-value neutral">{expenses.length}</div>
-                </div>
+                {(() => {
+                    const netBalance = memberBalances.reduce((sum, b) => sum + b.balance, 0);
+                    return (
+                        <>
+                            <div className="summary-card">
+                                <div className="summary-card-label">{netBalance >= 0 ? "You're Owed" : "You Owe"}</div>
+                                <div className={`summary-card-value ${netBalance >= 0 ? 'positive' : 'negative'}`}>
+                                    {formatINR(Math.abs(netBalance))}
+                                </div>
+                            </div>
+                            <div className="summary-card">
+                                <div className="summary-card-label">Expenses</div>
+                                <div className="summary-card-value neutral">{expenses.length}</div>
+                            </div>
+                        </>
+                    );
+                })()}
             </div>
 
             {/* Action Buttons */}
@@ -99,6 +114,15 @@ export default function GroupDetail() {
                         style={{ width: '100%' }}
                     >
                         <UserPlus size={16} /> Add Members
+                    </button>
+                )}
+                {group.createdBy === currentUser.id && (
+                    <button
+                        className="btn btn-secondary"
+                        onClick={() => setShowDeleteConfirm(true)}
+                        style={{ width: '100%' }}
+                    >
+                        <Trash2 size={16} /> Delete Group
                     </button>
                 )}
             </div>
@@ -259,6 +283,37 @@ export default function GroupDetail() {
                     onClose={() => setShowSettle(false)}
                     preselectedGroupId={id}
                 />
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {showDeleteConfirm && (
+                <div className="modal-overlay" onClick={() => setShowDeleteConfirm(false)}>
+                    <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '360px' }}>
+                        <div className="modal-header">
+                            <h2 className="modal-title">Delete Group</h2>
+                            <button className="modal-close" onClick={() => setShowDeleteConfirm(false)}>
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="modal-body">
+                            <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
+                                Are you sure you want to delete "{group.name}"? The expenses in this group will not be deleted.
+                            </p>
+                        </div>
+                        <div className="modal-footer">
+                            <button className="btn btn-secondary flex-1" onClick={() => setShowDeleteConfirm(false)}>
+                                Cancel
+                            </button>
+                            <button
+                                className="btn btn-primary flex-1"
+                                onClick={handleDeleteGroup}
+                                style={{ background: 'var(--danger)', borderColor: 'var(--danger)' }}
+                            >
+                                <Trash2 size={18} /> Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

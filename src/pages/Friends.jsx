@@ -13,9 +13,9 @@ export default function Friends() {
     const [newName, setNewName] = useState('');
     const [newEmail, setNewEmail] = useState('');
 
-    const handleAddFriend = () => {
+    const handleAddFriend = async () => {
         if (!newName.trim()) return;
-        addFriend(newName.trim(), newEmail.trim());
+        await addFriend(newName.trim(), newEmail.trim());
         setShowAdd(false);
         setNewName('');
         setNewEmail('');

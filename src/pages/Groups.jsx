@@ -6,15 +6,24 @@ import { getInitials, getAvatarColor } from '../utils/helpers';
 import { formatINR } from '../utils/currency';
 
 export default function Groups() {
-    const { groups, friends, currentUser, addGroup, getGroupBalanceDetails, getUserById } = useApp();
+    const { groups, friends, currentUser, addGroup, getGroupBalanceDetails, getUserById, showToast } = useApp();
     const navigate = useNavigate();
     const [showCreate, setShowCreate] = useState(false);
     const [newName, setNewName] = useState('');
     const [selectedMembers, setSelectedMembers] = useState([]);
 
-    const handleCreateGroup = () => {
+    const handleOpenCreateGroup = () => {
+        if (friends.length === 0) {
+            showToast('Add friends first to create a group');
+            return;
+        }
+        setShowCreate(true);
+    };
+
+    const handleCreateGroup = async () => {
+        console.log('Creating group with name:', newName, 'and members:', selectedMembers);
         if (!newName.trim() || selectedMembers.length === 0) return;
-        const group = addGroup(newName.trim(), selectedMembers);
+        const group = await addGroup(newName.trim(), selectedMembers);
         setShowCreate(false);
         setNewName('');
         setSelectedMembers([]);
@@ -32,7 +41,12 @@ export default function Groups() {
             <div className="page-header">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <h1 className="page-title">Groups</h1>
-                    <button className="btn btn-primary btn-sm" onClick={() => setShowCreate(true)}>
+                    <button
+                        className="btn btn-primary btn-sm"
+                        onClick={handleOpenCreateGroup}
+                        disabled={friends.length === 0}
+                        style={friends.length === 0 ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+                    >
                         <Plus size={16} /> New
                     </button>
                 </div>
@@ -44,8 +58,13 @@ export default function Groups() {
                         <Users size={36} />
                     </div>
                     <h3 className="empty-state-title">No groups yet</h3>
-                    <p className="empty-state-desc">Create a group to start splitting expenses with friends.</p>
-                    <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
+                    <p className="empty-state-desc">{friends.length === 0 ? 'Add friends first to create a group.' : 'Create a group to start splitting expenses with friends.'}</p>
+                    <button
+                        className="btn btn-primary"
+                        onClick={handleOpenCreateGroup}
+                        disabled={friends.length === 0}
+                        style={friends.length === 0 ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+                    >
                         <Plus size={18} /> Create Group
                     </button>
                 </div>
@@ -53,8 +72,8 @@ export default function Groups() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
                     {groups.map(group => {
                         const balances = getGroupBalanceDetails(group.id);
-                        const totalOwed = balances.reduce((sum, b) => sum + (b.balance > 0 ? b.balance : 0), 0);
-                        const totalOwe = balances.reduce((sum, b) => sum + (b.balance < 0 ? Math.abs(b.balance) : 0), 0);
+                        // Net balance: positive = you're owed, negative = you owe
+                        const netBalance = balances.reduce((sum, b) => sum + b.balance, 0);
 
                         return (
                             <div
@@ -93,17 +112,14 @@ export default function Groups() {
                                         </div>
                                     </div>
                                     <div style={{ textAlign: 'right' }}>
-                                        {totalOwed > 0 && (
-                                            <div className="text-positive" style={{ fontWeight: 700, fontSize: '0.9rem' }}>
-                                                +{formatINR(totalOwed)}
+                                        {Math.abs(netBalance) > 0.5 ? (
+                                            <div
+                                                className={netBalance > 0 ? 'text-positive' : 'text-negative'}
+                                                style={{ fontWeight: 700, fontSize: '0.9rem' }}
+                                            >
+                                                {netBalance > 0 ? '+' : '-'}{formatINR(Math.abs(netBalance))}
                                             </div>
-                                        )}
-                                        {totalOwe > 0 && (
-                                            <div className="text-negative" style={{ fontWeight: 700, fontSize: '0.9rem' }}>
-                                                -{formatINR(totalOwe)}
-                                            </div>
-                                        )}
-                                        {totalOwed === 0 && totalOwe === 0 && (
+                                        ) : (
                                             <div className="badge badge-positive">settled</div>
                                         )}
                                     </div>
@@ -163,8 +179,9 @@ export default function Groups() {
                             <button className="btn btn-secondary flex-1" onClick={() => setShowCreate(false)}>Cancel</button>
                             <button
                                 className="btn btn-primary flex-1"
+                                style={(newName.trim()==="" || selectedMembers.length < 1)? { opacity: 0.5, cursor: 'not-allowed' } : {}}
                                 onClick={handleCreateGroup}
-                                disabled={!newName.trim() || selectedMembers.length === 0}
+                                disabled={newName.trim()==="" || selectedMembers.length < 1}
                             >
                                 <Check size={18} /> Create
                             </button>

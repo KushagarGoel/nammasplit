@@ -1,13 +1,14 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { useAuth } from './AuthContext';
-import { createExpense, createSettlement, createActivity, createGroup, createUser } from '../data/models';
+import { createExpense, createSettlement, createActivity, createGroup } from '../data/models';
 import { computeBalances, getTotalBalances, getFriendBalances, simplifyDebts, getGroupBalances, getNetBalance } from '../data/balanceEngine';
 import { formatINR } from '../utils/currency';
 import {
     saveExpense, updateExpense, removeExpense,
-    saveSettlement, saveGroup, updateGroup,
+    saveSettlement, saveGroup, updateGroup, removeGroup,
     saveActivity, subscribeToUserData,
-    getFriendIds, getUserProfile, createUserProfile, addFriendLink,
+    getFriendIds, getUserProfile, addFriendLink, getUserByEmail,
+    createInvitation, getInvitationsForEmail, deleteInvitation,
 } from '../data/firestore';
 
 const AppContext = createContext(null);
@@ -57,7 +58,7 @@ export function AppProvider({ children }) {
 
             // Start real-time listener
             if (unsubRef.current) unsubRef.current();
-            unsubRef.current = subscribeToUserData(user.uid, fIds, (newData) => {
+            unsubRef.current = subscribeToUserData(user.uid, (newData) => {
                 if (!cancelled) {
                     setData(newData);
                     setLoading(false);
@@ -93,8 +94,11 @@ export function AppProvider({ children }) {
     }, [allUsers]);
 
     const getGroupById = useCallback((id) => {
+        if (!id) {
+            return { id: null, name: 'Miscellaneous', members: [currentUser.id] };
+        }
         return data.groups.find(g => g.id === id);
-    }, [data.groups]);
+    }, [data.groups, currentUser.id]);
 
     const getExpensesByGroup = useCallback((groupId) => {
         return data.expenses
@@ -134,17 +138,47 @@ export function AppProvider({ children }) {
 
     // ===== ACTIONS =====
     const addExpense = useCallback(async (expenseData) => {
-        const expense = createExpense(expenseData);
-        // Add involvedUsers for Firestore query
-        const involvedUsers = [...new Set([expense.paidBy, ...expense.splits.map(s => s.userId)])];
+        let finalGroupId = expenseData.groupId;
+
+        // Get all participants from splits before creating expense
+        const involvedUsers = [...new Set([expenseData.paidBy, ...expenseData.splits.map(s => s.userId)])];
+
+        // If no group selected, create/use Miscellaneous group
+        if (!finalGroupId) {
+            const miscGroupId = `misc-${currentUser.id}`;
+            const existingMisc = data.groups.find(g => g.id === miscGroupId);
+            if (!existingMisc) {
+                // Create Miscellaneous group with all participants
+                const miscGroup = createGroup({
+                    name: 'Miscellaneous',
+                    members: involvedUsers,
+                    createdBy: currentUser.id,
+                });
+                miscGroup.id = miscGroupId;
+                await saveGroup(miscGroup);
+            } else {
+                // Update existing Miscellaneous group to include all participants
+                const currentMembers = new Set(existingMisc.members);
+                const newMembers = involvedUsers.filter(id => !currentMembers.has(id));
+                if (newMembers.length > 0) {
+                    await updateGroup(miscGroupId, {
+                        members: [...existingMisc.members, ...newMembers]
+                    });
+                }
+            }
+            finalGroupId = miscGroupId;
+        }
+
+        const expense = createExpense({ ...expenseData, groupId: finalGroupId });
+        // Add involvedUsers for Firestore query (already computed above)
         expense.involvedUsers = involvedUsers;
 
         const payer = getUserById(expense.paidBy);
-        const groupName = expense.groupId ? getGroupById(expense.groupId)?.name : '';
+        const groupName = getGroupById(expense.groupId)?.name || 'Miscellaneous';
 
         const activity = createActivity({
             type: 'expense_added',
-            description: `${payer.name} added "${expense.description}"${groupName ? ` in ${groupName}` : ''}`,
+            description: `${payer.name} added "${expense.description}" in ${groupName}`,
             userId: expense.paidBy,
             groupId: expense.groupId,
             expenseId: expense.id,
@@ -160,7 +194,7 @@ export function AppProvider({ children }) {
 
         showToast(`Added "${expense.description}" — ${formatINR(expense.amount)}`);
         return expense;
-    }, [getUserById, getGroupById, showToast]);
+    }, [getUserById, getGroupById, showToast, data.groups, currentUser.id]);
 
     const editExpense = useCallback(async (expenseId, expenseData) => {
         const involvedUsers = [...new Set([expenseData.paidBy, ...expenseData.splits.map(s => s.userId)])];
@@ -195,7 +229,7 @@ export function AppProvider({ children }) {
 
         const activity = createActivity({
             type: 'expense_deleted',
-            description: `${getUserById(expense.paidBy).name} deleted "${expense.description}"`,
+            description: `${currentUser.name} deleted "${expense.description}"`,
             userId: currentUser.id,
             groupId: expense.groupId,
             expenseId: expense.id,
@@ -281,27 +315,114 @@ export function AppProvider({ children }) {
         showToast(`Added ${friend.name} to ${group.name}`);
     }, [data.groups, data.friends, currentUser, showToast]);
 
-    const addFriend = useCallback(async (name, email) => {
-        // Create a demo friend user profile
-        const friend = createUser({ name, email });
+    const deleteGroup = useCallback(async (groupId) => {
+        const group = data.groups.find(g => g.id === groupId);
+        if (!group) return;
 
-        await createUserProfile(friend.id, { name, email, avatar: null, isDemo: true });
-        await addFriendLink(currentUser.id, friend.id);
+        // Only allow creator to delete
+        if (group.createdBy !== currentUser.id) {
+            showToast('Only the group creator can delete');
+            return;
+        }
 
         const activity = createActivity({
-            type: 'friend_added',
-            description: `${currentUser.name} added ${name} as a friend`,
+            type: 'group_created',
+            description: `${currentUser.name} deleted group "${group.name}"`,
             userId: currentUser.id,
-            involvedUsers: [currentUser.id, friend.id],
+            groupId,
+            involvedUsers: group.members,
         });
 
-        await saveActivity(activity);
+        await Promise.all([
+            removeGroup(groupId),
+            saveActivity(activity),
+        ]);
 
-        // Update local friendIds so the real-time listener picks up the new friend
-        setFriendIds(prev => [...prev, friend.id]);
+        showToast(`Deleted group "${group.name}"`);
+    }, [data.groups, currentUser, showToast]);
 
-        showToast(`Added ${name} as friend`);
-        return friend;
+    const addFriend = useCallback(async (name, email) => {
+        if (!currentUser.id) {
+            showToast('Please wait, loading...');
+            return;
+        }
+        try {
+            // Check if user with this email already exists
+            let friend = null;
+            if (email) {
+                try {
+                    const existingUser = await getUserByEmail(email);
+                    if (existingUser) {
+                        friend = existingUser;
+                    }
+                } catch (err) {
+                    console.error('Error checking existing user:', err);
+                }
+            }
+
+            if (friend) {
+                // User exists - create direct friend link
+                try {
+                    await addFriendLink(currentUser.id, friend.id);
+                } catch (err) {
+                    console.error('Error creating friend link:', err);
+                    throw new Error('Failed to link friends: ' + err.message);
+                }
+
+                // Save activity
+                const activity = createActivity({
+                    type: 'friend_added',
+                    description: `${currentUser.name} added ${name} as a friend`,
+                    userId: currentUser.id,
+                    involvedUsers: [currentUser.id, friend.id],
+                });
+
+                try {
+                    await saveActivity(activity);
+                } catch (err) {
+                    console.error('Error saving activity:', err);
+                }
+
+                // Update local friendIds so the real-time listener picks up the new friend
+                setFriendIds(prev => [...prev, friend.id]);
+
+                showToast(`Added ${name} as friend`);
+                return friend;
+            } else {
+                // User doesn't exist - create a pending invitation
+                if (!email) {
+                    throw new Error('Email is required to invite a new friend');
+                }
+
+                try {
+                    await createInvitation(currentUser.id, email, name);
+                } catch (err) {
+                    console.error('Error creating invitation:', err);
+                    throw new Error('Failed to create invitation: ' + err.message);
+                }
+
+                // Save activity for the invitation
+                const activity = createActivity({
+                    type: 'friend_added',
+                    description: `${currentUser.name} invited ${name} to join`,
+                    userId: currentUser.id,
+                    involvedUsers: [currentUser.id],
+                });
+
+                try {
+                    await saveActivity(activity);
+                } catch (err) {
+                    console.error('Error saving activity:', err);
+                }
+
+                showToast(`Invitation sent to ${name}`);
+                return { id: null, name, email, isPending: true };
+            }
+        } catch (err) {
+            console.error('addFriend error:', err);
+            showToast('Error: ' + err.message);
+            throw err;
+        }
     }, [currentUser, showToast]);
 
     const value = {
@@ -336,6 +457,7 @@ export function AppProvider({ children }) {
         settleUp,
         addGroup,
         addMemberToGroup,
+        deleteGroup,
         addFriend,
 
         // UI

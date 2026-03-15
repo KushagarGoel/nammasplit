@@ -5,9 +5,10 @@ import {
     signOut,
     onAuthStateChanged,
     updateProfile,
+    getIdToken,
 } from 'firebase/auth';
 import { auth } from '../data/firebase';
-import { createUserProfile, getUserProfile, seedDataForUser } from '../data/firestore';
+import { createUserProfile, getUserProfile, seedDataForUser, getInvitationsForEmail, addFriendLink, deleteInvitation } from '../data/firestore';
 
 const AuthContext = createContext(null);
 
@@ -26,22 +27,46 @@ export function AuthProvider({ children }) {
     useEffect(() => {
         const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
             if (firebaseUser) {
+                console.log('Auth state changed - User:', firebaseUser.email, 'UID:', firebaseUser.uid);
                 setUser(firebaseUser);
                 // Fetch or create profile
                 let profile = await getUserProfile(firebaseUser.uid);
+                console.log('Profile lookup result:', profile);
+                let isNewUser = false;
                 if (!profile) {
                     // First login — create profile + seed data
+                    isNewUser = true;
+                    console.log('No profile found, creating new user profile...');
                     const name = firebaseUser.displayName || firebaseUser.email.split('@')[0];
-                    await createUserProfile(firebaseUser.uid, {
-                        name,
-                        email: firebaseUser.email,
-                        avatar: null,
-                    });
-                    await seedDataForUser(firebaseUser.uid, name, firebaseUser.email);
-                    profile = await getUserProfile(firebaseUser.uid);
+                    try {
+                        await createUserProfile(firebaseUser.uid, {
+                            name,
+                            email: firebaseUser.email,
+                            avatar: null,
+                        });
+                        console.log('Profile created, fetching profile data...');
+                        profile = await getUserProfile(firebaseUser.uid);
+                        console.log('Profile created successfully');
+                    } catch (err) {
+                        console.error('Error creating profile:', err);
+                        throw err;
+                    }
+                } else {
+                    console.log('Existing profile found, not a new user');
                 }
                 setUserProfile(profile);
+
+                // Process pending invitations for new users
+                console.log('Checking isNewUser:', isNewUser, 'email:', firebaseUser.email);
+                if (isNewUser && firebaseUser.email) {
+                    console.log('Processing pending invitations for new user:', firebaseUser.email);
+                    const invitationCount = await processPendingInvitations(firebaseUser.email, firebaseUser.uid);
+                    console.log(`Processed ${invitationCount} pending friend invitations`);
+                } else {
+                    console.log('Skipping invitation processing - isNewUser:', isNewUser, 'email:', firebaseUser.email);
+                }
             } else {
+                console.log('User logged out');
                 setUser(null);
                 setUserProfile(null);
             }
@@ -78,6 +103,8 @@ export function AuthProvider({ children }) {
         await signOut(auth);
     }, []);
 
+    const clearError = useCallback(() => setError(null), []);
+
     return (
         <AuthContext.Provider value={{
             user,
@@ -87,11 +114,30 @@ export function AuthProvider({ children }) {
             signup,
             login,
             logout,
+            clearError,
             isAuthenticated: !!user,
         }}>
             {children}
         </AuthContext.Provider>
     );
+}
+
+async function processPendingInvitations(email, newUserId) {
+    try {
+        const invitations = await getInvitationsForEmail(email);
+        for (const invitation of invitations) {
+            // Create bidirectional friend links
+            console.log(`Processing invitation from ${invitation.fromUserId} to ${newUserId}`);
+            await addFriendLink(invitation.fromUserId, newUserId);
+            await addFriendLink(newUserId, invitation.fromUserId);
+            // Delete the processed invitation
+            await deleteInvitation(invitation.id);
+        }
+        return invitations.length;
+    } catch (err) {
+        console.error('Error processing pending invitations:', err);
+        return 0;
+    }
 }
 
 function getErrorMessage(code) {
