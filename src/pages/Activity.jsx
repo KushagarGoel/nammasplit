@@ -5,6 +5,7 @@ import { formatDate } from '../utils/helpers';
 
 const ACTIVITY_ICONS = {
     expense_added: { icon: ReceiptText, color: 'var(--primary)' },
+    expense_updated: { icon: ReceiptText, color: 'var(--primary)' },
     expense_deleted: { icon: Trash2, color: 'var(--negative)' },
     settlement: { icon: HandCoins, color: 'var(--accent)' },
     group_created: { icon: Users, color: '#9C27B0' },

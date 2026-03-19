@@ -11,7 +11,7 @@ const SPLIT_TYPES = [
     { id: 'shares', label: 'Shares' },
 ];
 
-export default function AddExpenseModal({ onClose, preselectedGroupId = null, editingExpense = null, onDelete }) {
+export default function AddExpenseModal({ onClose, preselectedGroupId = null, preselectedFriendId = null, editingExpense = null, onDelete }) {
     const { currentUser, friends, groups, addExpense, editExpense, getUserById, showToast } = useApp();
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -42,6 +42,7 @@ export default function AddExpenseModal({ onClose, preselectedGroupId = null, ed
     const [selectedParticipants, setSelectedParticipants] = useState(() => {
         if (editingExpense) return editingExpense.splits.map(s => s.userId);
         if (selectedGroup) return selectedGroup.members;
+        if (preselectedFriendId) return [currentUser.id, preselectedFriendId];
         return [currentUser.id];
     });
 
@@ -165,20 +166,25 @@ export default function AddExpenseModal({ onClose, preselectedGroupId = null, ed
 
     const handleSubmit = async () => {
         if (!amount || parseFloat(amount) <= 0) return;
+        if (!description || !description.trim()) {
+            showToast('Please enter a description');
+            return;
+        }
 
         // Check if this is a shared expense (multiple participants) without a group
         const isSharedExpense = selectedParticipants.length >= 2;
         const isPersonalExpense = selectedParticipants.length === 1 && selectedParticipants[0] === currentUser.id;
+        const isDirectFriendExpense = selectedParticipants.length === 2 && !groupId;
 
-        // For shared expenses without a group, require group creation (only for new expenses)
-        if (isSharedExpense && !groupId && !isEditing) {
-            showToast('Please select or create a group for shared expenses');
+        // For shared expenses without a group (and not direct 1-on-1), require group creation (only for new expenses)
+        if (isSharedExpense && !groupId && !isEditing && !isDirectFriendExpense) {
+            showToast('Please select or create a group for shared expenses with 3+ people');
             return;
         }
 
         // For editing, if participants changed and expense has groupId, check if new group needed
-        if (isEditing && isSharedExpense && !groupId) {
-            showToast('Shared expenses must be in a group. Please select a group.');
+        if (isEditing && isSharedExpense && !groupId && !isDirectFriendExpense) {
+            showToast('Shared expenses with 3+ people must be in a group. Please select a group.');
             return;
         }
 
@@ -257,15 +263,16 @@ export default function AddExpenseModal({ onClose, preselectedGroupId = null, ed
                         />
                     </div>
 
-                    {/* Description — optional */}
+                    {/* Description */}
                     <div className="form-group">
-                        <label className="form-label">Description <span style={{ color: 'var(--text-tertiary)', fontWeight: 400 }}>(optional)</span></label>
+                        <label className="form-label">Description *</label>
                         <input
                             type="text"
                             className="form-input"
                             value={description}
                             onChange={e => setDescription(e.target.value)}
                             placeholder="e.g., Dinner at Barbeque Nation"
+                            required
                         />
                     </div>
 

@@ -61,7 +61,7 @@ export function createSettlement({ fromUserId, toUserId, amount, method = 'cash'
 export function createActivity({ type, description, userId, groupId = null, expenseId = null, amount = null, involvedUsers = [] }) {
     return {
         id: generateId(),
-        type, // 'expense_added' | 'expense_deleted' | 'settlement' | 'group_created' | 'friend_added'
+        type, // 'expense_added' | 'expense_updated' | 'expense_deleted' | 'settlement' | 'group_created' | 'friend_added'
         description,
         userId,
         groupId,

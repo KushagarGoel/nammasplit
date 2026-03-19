@@ -140,6 +140,7 @@ export default function FriendDetail() {
                         setShowAddExpense(false);
                         setEditingExpense(null);
                     }}
+                    preselectedFriendId={id}
                     editingExpense={editingExpense}
                     onDelete={deleteExpense}
                 />

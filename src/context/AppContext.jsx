@@ -171,9 +171,10 @@ export function AppProvider({ children }) {
         // Get all participants from splits before creating expense
         const involvedUsers = [...new Set([expenseData.paidBy, ...expenseData.splits.map(s => s.userId)])];
         const isPersonalExpense = involvedUsers.length === 1 && involvedUsers[0] === currentUser.id;
+        const isDirectFriendExpense = involvedUsers.length === 2 && !finalGroupId;
 
-        // For shared expenses without a group, create a new named group
-        if (!finalGroupId && !isPersonalExpense) {
+        // For shared expenses without a group, create a new named group (but not for direct 1-on-1 friend expenses)
+        if (!finalGroupId && !isPersonalExpense && !isDirectFriendExpense) {
             // Generate a unique group ID based on sorted participants and timestamp
             const sortedUserIds = [...involvedUsers].sort().join('-');
             const groupId = `grp-${sortedUserIds}-${Date.now()}`;
@@ -203,16 +204,26 @@ export function AppProvider({ children }) {
         expense.involvedUsers = involvedUsers;
 
         const payer = getUserById(expense.paidBy);
-        const groupName = isPersonalExpense
-            ? 'Personal'
-            : (getGroupById(expense.groupId)?.name || 'Shared');
+
+        // Get display name for the expense context
+        let contextName = 'Personal';
+        if (!isPersonalExpense) {
+            if (isDirectFriendExpense) {
+                // For direct 1-on-1 expenses, show the friend's name
+                const otherUserId = involvedUsers.find(id => id !== currentUser.id);
+                const otherUser = getUserById(otherUserId);
+                contextName = otherUser?.name || 'Shared';
+            } else {
+                contextName = getGroupById(expense.groupId)?.name || 'Shared';
+            }
+        }
 
         // Ensure activity involvedUsers always includes the payer (for security rules)
         const activityInvolvedUsers = [...new Set([expense.paidBy, ...involvedUsers])];
 
         const activity = createActivity({
             type: 'expense_added',
-            description: `${payer.name} added "${expense.description}"${isPersonalExpense ? '' : ` in ${groupName}`}`,
+            description: `${payer.name} added "${expense.description}"${isPersonalExpense ? '' : ` in ${contextName}`}`,
             userId: expense.paidBy,
             groupId: expense.groupId,
             expenseId: expense.id,
@@ -237,10 +248,10 @@ export function AppProvider({ children }) {
 
         const toastMessage = isPersonalExpense
             ? `Added "${expense.description}" — ${formatINR(expense.amount)}`
-            : `Added "${expense.description}" to ${groupName} — ${formatINR(expense.amount)}`;
+            : `Added "${expense.description}" with ${contextName} — ${formatINR(expense.amount)}`;
         showToast(toastMessage);
         return expense;
-    }, [getUserById, getGroupById, showToast, data.groups, currentUser.id]);
+    }, [getUserById, getGroupById, showToast, data.groups, currentUser.id, currentUser.name]);
 
     const editExpense = useCallback(async (expenseId, expenseData) => {
         const involvedUsers = [...new Set([expenseData.paidBy, ...expenseData.splits.map(s => s.userId)])];
@@ -250,10 +261,9 @@ export function AppProvider({ children }) {
             involvedUsers,
         };
 
-        const payer = getUserById(expenseData.paidBy);
         const activity = createActivity({
-            type: 'expense_added',
-            description: `${payer.name} updated "${expenseData.description}"`,
+            type: 'expense_updated',
+            description: `${currentUser.name} updated "${expenseData.description}"`,
             userId: currentUser.id,
             groupId: expenseData.groupId,
             expenseId: expenseId,
