@@ -1,24 +1,66 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserPlus, Search, X, Check } from 'lucide-react';
+import { UserPlus, Search, X, Check, Link as LinkIcon, Copy, Share2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { formatINR } from '../utils/currency';
 import { getInitials, getAvatarColor } from '../utils/helpers';
+import { createInviteToken } from '../data/firestore';
 
 export default function Friends() {
-    const { friends, addFriend, getFriendBalance } = useApp();
+    const { currentUser, friends, getFriendBalance, showToast } = useApp();
     const navigate = useNavigate();
     const [showAdd, setShowAdd] = useState(false);
     const [search, setSearch] = useState('');
-    const [newName, setNewName] = useState('');
-    const [newEmail, setNewEmail] = useState('');
+    const [inviteLink, setInviteLink] = useState('');
+    const [generatingLink, setGeneratingLink] = useState(false);
+    const [linkCopied, setLinkCopied] = useState(false);
 
-    const handleAddFriend = async () => {
-        if (!newName.trim()) return;
-        await addFriend(newName.trim(), newEmail.trim());
-        setShowAdd(false);
-        setNewName('');
-        setNewEmail('');
+    const generateInviteLink = async () => {
+        setGeneratingLink(true);
+        try {
+            const token = await createInviteToken(currentUser.id);
+            const link = `${window.location.origin}/invite/${token}`;
+            setInviteLink(link);
+        } catch (err) {
+            console.error('Failed to generate invite link:', err);
+            showToast('Failed to generate invite link');
+        } finally {
+            setGeneratingLink(false);
+        }
+    };
+
+    const copyToClipboard = async () => {
+        try {
+            await navigator.clipboard.writeText(inviteLink);
+            setLinkCopied(true);
+            setTimeout(() => setLinkCopied(false), 2000);
+        } catch (err) {
+            // Fallback for older browsers
+            const textArea = document.createElement('textarea');
+            textArea.value = inviteLink;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            setLinkCopied(true);
+            setTimeout(() => setLinkCopied(false), 2000);
+        }
+    };
+
+    const shareInvite = async () => {
+        try {
+            if (navigator.share) {
+                await navigator.share({
+                    title: 'Join me on NammaSplit',
+                    text: `Connect with me on NammaSplit to split expenses!`,
+                    url: inviteLink,
+                });
+            } else {
+                copyToClipboard();
+            }
+        } catch (err) {
+            // User cancelled or share failed
+        }
     };
 
     const filteredFriends = friends.filter(f =>
@@ -72,7 +114,7 @@ export default function Friends() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <h1 className="page-title">Friends</h1>
                     <button className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>
-                        <UserPlus size={16} /> Add
+                        <UserPlus size={16} /> Invite
                     </button>
                 </div>
             </div>
@@ -96,9 +138,9 @@ export default function Friends() {
                         <UserPlus size={36} />
                     </div>
                     <h3 className="empty-state-title">No friends yet</h3>
-                    <p className="empty-state-desc">Add friends to start splitting expenses.</p>
+                    <p className="empty-state-desc">Invite friends to start splitting expenses.</p>
                     <button className="btn btn-primary" onClick={() => setShowAdd(true)}>
-                        <UserPlus size={18} /> Add Friend
+                        <UserPlus size={18} /> Invite Friend
                     </button>
                 </div>
             ) : (
@@ -139,50 +181,100 @@ export default function Friends() {
                     {filteredFriends.length === 0 && search && (
                         <div className="empty-state">
                             <h3 className="empty-state-title">No results</h3>
-                            <p className="empty-state-desc">No friends match "{search}"</p>
+                            <p className="empty-state-desc">No friends match &quot;{search}&quot;</p>
                         </div>
                     )}
                 </>
             )}
 
-            {/* Add Friend Modal */}
+            {/* Invite Friend Modal */}
             {showAdd && (
                 <div className="modal-overlay" onClick={() => setShowAdd(false)}>
                     <div className="modal-content" onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
-                            <h2 className="modal-title">Add Friend</h2>
+                            <h2 className="modal-title">Invite Friend</h2>
                             <button className="modal-close" onClick={() => setShowAdd(false)}>
                                 <X size={20} />
                             </button>
                         </div>
                         <div className="modal-body">
-                            <div className="form-group">
-                                <label className="form-label">Name</label>
-                                <input
-                                    type="text"
-                                    className="form-input"
-                                    value={newName}
-                                    onChange={e => setNewName(e.target.value)}
-                                    placeholder="e.g., Riya Kapoor"
-                                    autoFocus
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label className="form-label">Email (optional)</label>
-                                <input
-                                    type="email"
-                                    className="form-input"
-                                    value={newEmail}
-                                    onChange={e => setNewEmail(e.target.value)}
-                                    placeholder="riya@email.com"
-                                />
-                            </div>
+                            {!inviteLink ? (
+                                <div style={{ textAlign: 'center', padding: '24px 0' }}>
+                                    <div style={{
+                                        width: 64,
+                                        height: 64,
+                                        borderRadius: '50%',
+                                        background: 'var(--primary-bg)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        margin: '0 auto 16px'
+                                    }}>
+                                        <LinkIcon size={32} style={{ color: 'var(--primary)' }} />
+                                    </div>
+                                    <p style={{ color: 'var(--text-secondary)', marginBottom: 24 }}>
+                                        Generate a unique invite link to share with friends. They can use it to join and automatically connect with you.
+                                    </p>
+                                    <button
+                                        className="btn btn-primary"
+                                        onClick={generateInviteLink}
+                                        disabled={generatingLink}
+                                        style={{ minWidth: 200 }}
+                                    >
+                                        {generatingLink ? 'Generating...' : (
+                                            <><LinkIcon size={18} style={{ marginRight: 8 }} /> Generate Invite Link</>
+                                        )}
+                                    </button>
+                                </div>
+                            ) : (
+                                <div>
+                                    <p style={{ color: 'var(--text-secondary)', marginBottom: 16 }}>
+                                        Share this link with your friend. When they sign up or log in using this link, you&apos;ll be automatically connected.
+                                    </p>
+                                    <div style={{
+                                        display: 'flex',
+                                        gap: 8,
+                                        marginBottom: 16
+                                    }}>
+                                        <input
+                                            type="text"
+                                            className="form-input"
+                                            value={inviteLink}
+                                            readOnly
+                                            style={{ flex: 1, fontSize: '0.85rem' }}
+                                        />
+                                        <button
+                                            className="btn btn-secondary"
+                                            onClick={copyToClipboard}
+                                            style={{ padding: '8px 16px' }}
+                                        >
+                                            {linkCopied ? <Check size={18} /> : <Copy size={18} />}
+                                        </button>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+                                        <button
+                                            className="btn btn-secondary"
+                                            onClick={shareInvite}
+                                            style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+                                        >
+                                            <Share2 size={16} /> Share
+                                        </button>
+                                        <button
+                                            className="btn btn-secondary"
+                                            onClick={() => setInviteLink('')}
+                                        >
+                                            Generate New
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                         <div className="modal-footer">
-                            <button className="btn btn-secondary flex-1" onClick={() => setShowAdd(false)}>Cancel</button>
-                            <button className="btn btn-primary flex-1" onClick={handleAddFriend} disabled={!newName.trim()}>
-                                <Check size={18} /> Add Friend
-                            </button>
+                            <button className="btn btn-secondary flex-1" onClick={() => {
+                                setShowAdd(false);
+                                setInviteLink('');
+                                setLinkCopied(false);
+                            }}>Close</button>
                         </div>
                     </div>
                 </div>

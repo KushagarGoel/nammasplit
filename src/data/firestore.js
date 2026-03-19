@@ -11,6 +11,7 @@ const expensesCol = () => collection(db, 'expenses');
 const settlementsCol = () => collection(db, 'settlements');
 const activitiesCol = () => collection(db, 'activities');
 const invitationsCol = () => collection(db, 'invitations');
+const inviteTokensCol = () => collection(db, 'inviteTokens');
 
 // ===== USER =====
 export async function createUserProfile(uid, data, retryCount = 0) {
@@ -36,6 +37,19 @@ export async function getUserProfile(uid) {
     return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
+export async function getUsersByIds(uids) {
+    if (!uids || uids.length === 0) return [];
+    const users = [];
+    // Firestore 'in' query supports up to 30 values
+    for (let i = 0; i < uids.length; i += 30) {
+        const batch = uids.slice(i, i + 30);
+        const q = query(usersCol(), where('__name__', 'in', batch));
+        const snap = await getDocs(q);
+        users.push(...snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }
+    return users;
+}
+
 export async function getUserByEmail(email) {
     const q = query(usersCol(), where('email', '==', email));
     const snap = await getDocs(q);
@@ -47,9 +61,16 @@ export async function getUserByEmail(email) {
 // ===== FRIENDS =====
 // Friends are stored as a subcollection: users/{uid}/friends/{friendId}
 export async function addFriendLink(uid, friendId) {
-    // Only create link from current user's side to avoid permission issues
-    // The friend link is one-way; queries check both directions
-    await setDoc(doc(db, 'users', uid, 'friends', friendId), { addedAt: new Date().toISOString() });
+    // Create friend link in the user's friends subcollection
+    const path = `users/${uid}/friends/${friendId}`;
+    console.log(`Writing to path: ${path}`);
+    try {
+        await setDoc(doc(db, 'users', uid, 'friends', friendId), { addedAt: new Date().toISOString() });
+        console.log(`Success: ${path}`);
+    } catch (err) {
+        console.error(`Failed writing to ${path}:`, err.code, err.message);
+        throw err;
+    }
 }
 
 export async function getFriendIds(uid) {
@@ -60,6 +81,11 @@ export async function getFriendIds(uid) {
 // ===== GROUPS =====
 export async function saveGroup(group) {
     await setDoc(doc(db, 'groups', group.id), group);
+}
+
+export async function getGroup(groupId) {
+    const snap = await getDoc(doc(db, 'groups', groupId));
+    return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
 export async function updateGroup(groupId, data) {
@@ -83,9 +109,25 @@ export async function removeExpense(expenseId) {
     await deleteDoc(doc(db, 'expenses', expenseId));
 }
 
+export async function removeExpensesByGroup(groupId) {
+    const q = query(expensesCol(), where('groupId', '==', groupId));
+    const snap = await getDocs(q);
+    const batch = writeBatch(db);
+    snap.docs.forEach(d => batch.delete(d.ref));
+    await batch.commit();
+}
+
 // ===== SETTLEMENTS =====
 export async function saveSettlement(settlement) {
     await setDoc(doc(db, 'settlements', settlement.id), settlement);
+}
+
+export async function removeSettlementsByGroup(groupId) {
+    const q = query(settlementsCol(), where('groupId', '==', groupId));
+    const snap = await getDocs(q);
+    const batch = writeBatch(db);
+    snap.docs.forEach(d => batch.delete(d.ref));
+    await batch.commit();
 }
 
 // ===== ACTIVITIES =====
@@ -420,4 +462,33 @@ export async function getInvitationsForEmail(email) {
 // Delete an invitation after processing
 export async function deleteInvitation(invitationId) {
     await deleteDoc(doc(db, 'invitations', invitationId));
+}
+
+// ===== INVITE TOKENS =====
+// Create an invite token for a user
+export async function createInviteToken(userId) {
+    const token = `${userId}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const tokenData = {
+        userId,
+        createdAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days
+        usedBy: null,
+        usedAt: null,
+    };
+    await setDoc(doc(db, 'inviteTokens', token), tokenData);
+    return token;
+}
+
+// Get invite token data
+export async function getInviteToken(token) {
+    const snap = await getDoc(doc(db, 'inviteTokens', token));
+    return snap.exists() ? { token, ...snap.data() } : null;
+}
+
+// Mark invite token as used
+export async function useInviteToken(token, usedByUserId) {
+    await updateDoc(doc(db, 'inviteTokens', token), {
+        usedBy: usedByUserId,
+        usedAt: new Date().toISOString(),
+    });
 }

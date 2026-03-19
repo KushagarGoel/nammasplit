@@ -11,10 +11,11 @@ import SettleUpModal from '../components/SettleUpModal';
 export default function GroupDetail() {
     const { id } = useParams();
     const navigate = useNavigate();
-    const { getGroupById, getExpensesByGroup, getGroupBalanceDetails, getGroupSimplifiedDebts, getUserById, currentUser, friends, addMemberToGroup, deleteGroup } = useApp();
+    const { getGroupById, getExpensesByGroup, getGroupBalanceDetails, getGroupSimplifiedDebts, getUserById, currentUser, friends, addMemberToGroup, deleteGroup, deleteExpense } = useApp();
 
     const [showAddExpense, setShowAddExpense] = useState(false);
     const [showSettle, setShowSettle] = useState(false);
+    const [showSettledUp, setShowSettledUp] = useState(false);
     const [showAddMember, setShowAddMember] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [activeTab, setActiveTab] = useState('expenses');
@@ -44,7 +45,7 @@ export default function GroupDetail() {
     // Friends not in this group
     const nonMembers = friends.filter(f => !group.members.includes(f.id));
 
-    const handleEditExpense = (expense) => {
+    const handleExpenseClick = (expense) => {
         setEditingExpense(expense);
         setShowAddExpense(true);
     };
@@ -104,7 +105,14 @@ export default function GroupDetail() {
                 <button className="btn btn-primary flex-1" onClick={() => { setEditingExpense(null); setShowAddExpense(true); }}>
                     <Plus size={18} /> Add Expense
                 </button>
-                <button className="btn btn-accent flex-1" onClick={() => setShowSettle(true)}>
+                <button className="btn btn-accent flex-1" onClick={() => {
+                    const netBalance = memberBalances.reduce((sum, b) => sum + b.balance, 0);
+                    if (netBalance >= 0) {
+                        setShowSettledUp(true);
+                    } else {
+                        setShowSettle(true);
+                    }
+                }}>
                     <HandCoins size={18} /> Settle Up
                 </button>
                 {nonMembers.length > 0 && (
@@ -193,7 +201,7 @@ export default function GroupDetail() {
                             <ExpenseCard
                                 key={expense.id}
                                 expense={expense}
-                                onEdit={handleEditExpense}
+                                onClick={() => handleExpenseClick(expense)}
                             />
                         ))
                     )}
@@ -275,6 +283,7 @@ export default function GroupDetail() {
                     onClose={closeExpenseModal}
                     preselectedGroupId={id}
                     editingExpense={editingExpense}
+                    onDelete={deleteExpense}
                 />
             )}
 
@@ -283,6 +292,35 @@ export default function GroupDetail() {
                     onClose={() => setShowSettle(false)}
                     preselectedGroupId={id}
                 />
+            )}
+
+            {/* Settled Up Modal - shown when user doesn't owe anything */}
+            {showSettledUp && (
+                <div className="modal-overlay" onClick={() => setShowSettledUp(false)}>
+                    <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '360px' }}>
+                        <div className="modal-header">
+                            <h2 className="modal-title">All Settled Up! 🎉</h2>
+                            <button className="modal-close" onClick={() => setShowSettledUp(false)}>
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="modal-body">
+                            <div className="empty-state" style={{ padding: 'var(--space-lg) 0' }}>
+                                <div className="empty-state-icon">
+                                    <HandCoins size={48} />
+                                </div>
+                                <p className="empty-state-desc">
+                                    You don't owe anything in this group. Everything is settled!
+                                </p>
+                            </div>
+                        </div>
+                        <div className="modal-footer">
+                            <button className="btn btn-primary flex-1" onClick={() => setShowSettledUp(false)}>
+                                Great!
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
 
             {/* Delete Confirmation Modal */}
@@ -297,7 +335,7 @@ export default function GroupDetail() {
                         </div>
                         <div className="modal-body">
                             <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
-                                Are you sure you want to delete "{group.name}"? The expenses in this group will not be deleted.
+                                Are you sure you want to delete "{group.name}"? All expenses and settlements in this group will be permanently deleted.
                             </p>
                         </div>
                         <div className="modal-footer">

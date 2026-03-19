@@ -1,31 +1,44 @@
-import { useState } from 'react';
-import { X, Check } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { X, Check, ExternalLink } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { formatINR } from '../utils/currency';
 import { getInitials, getAvatarColor } from '../utils/helpers';
 
 const PAYMENT_METHODS = [
     { id: 'upi', label: 'UPI', emoji: '📱' },
-    { id: 'gpay', label: 'GPay', emoji: '💳' },
-    { id: 'phonepe', label: 'PhonePe', emoji: '📲' },
     { id: 'cash', label: 'Cash', emoji: '💵' },
     { id: 'bank', label: 'Bank', emoji: '🏦' },
-    { id: 'paytm', label: 'Paytm', emoji: '🔷' },
 ];
 
 export default function SettleUpModal({ onClose, preselectedFriendId = null, preselectedGroupId = null }) {
     const { currentUser, friends, settleUp, getFriendBalance, getUserById } = useApp();
 
-    const [step, setStep] = useState(preselectedFriendId ? 2 : 1); // 1: select friend, 2: enter amount
+    const [step, setStep] = useState(preselectedFriendId ? 2 : 1);
     const [selectedFriendId, setSelectedFriendId] = useState(preselectedFriendId);
     const [amount, setAmount] = useState('');
     const [method, setMethod] = useState('upi');
 
-    // Friends who owe currentUser or currentUser owes
     const friendsWithBalances = friends
         .map(f => ({ ...f, balance: getFriendBalance(f.id) }))
         .filter(f => Math.abs(f.balance) > 0.5)
         .sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance));
+
+    const selectedFriend = selectedFriendId ? getUserById(selectedFriendId) : null;
+    const selectedBalance = selectedFriendId ? getFriendBalance(selectedFriendId) : 0;
+
+    const upiUrl = useMemo(() => {
+        if (!selectedFriend) return null;
+        const payAmount = parseFloat(amount) || 0;
+        const note = 'Payment via Nammasplit';
+
+        // If recipient has UPI ID, include it; otherwise open UPI app without payee
+        if (selectedFriend.upiId) {
+            return `upi://pay?pa=${encodeURIComponent(selectedFriend.upiId)}&pn=${encodeURIComponent(selectedFriend.name)}&am=${payAmount}&cu=INR&tn=${encodeURIComponent(note)}`;
+        } else {
+            // Open UPI app with just amount and note, user selects payee manually
+            return `upi://pay?am=${payAmount}&cu=INR&tn=${encodeURIComponent(note)}`;
+        }
+    }, [selectedFriend, amount]);
 
     const handleSelectFriend = (friendId) => {
         setSelectedFriendId(friendId);
@@ -33,6 +46,49 @@ export default function SettleUpModal({ onClose, preselectedFriendId = null, pre
         const bal = getFriendBalance(friendId);
         setAmount(Math.abs(bal).toFixed(0));
         setStep(2);
+    };
+
+    const openUpiApp = async () => {
+        const upiApps = [
+        { id: 'gpay',     label: 'Google Pay',   method: 'https://tez.google.com/pay' },
+        { id: 'phonepe',  label: 'PhonePe',      method: 'https://mercury.phonepe.com/transact/pay' },
+        { id: 'paytm',    label: 'Paytm',        method: 'https://paytm.com/payment' },
+        { id: 'bhim',     label: 'BHIM',         method: 'https://upi.npci.org.in/pay' },
+        { id: 'amazonpay',label: 'Amazon Pay',   method: 'https://amazonpay.amazon.in/pay' },
+        { id: 'cred',     label: 'CRED',         method: 'https://cred.club/pay' },
+        { id: 'mobikwik', label: 'MobiKwik',     method: 'https://mobikwik.com/pay' },
+        ];
+
+        async function getAvailableUpiApps() {
+        const available = [];
+
+        await Promise.all(
+            upiApps.map(async (app) => {
+            try {
+                const request = new PaymentRequest(
+                [{ supportedMethods: app.method }],
+                { total: { label: 'Test', amount: { currency: 'INR', value: '1.00' } } }
+                );
+
+                const canPay = await request.canMakePayment();
+                if (canPay) available.push(app);
+
+            } catch (e) {
+                // App not available, skip
+            }
+            })
+        );
+
+        return available;
+        }
+
+        // Usage
+        const apps = await getAvailableUpiApps();
+        console.log('Available UPI apps:', apps);
+        
+        if (upiUrl) {
+            window.location.href = upiUrl;
+        }
     };
 
     const handleSettle = () => {
@@ -52,9 +108,6 @@ export default function SettleUpModal({ onClose, preselectedFriendId = null, pre
 
         onClose();
     };
-
-    const selectedFriend = selectedFriendId ? getUserById(selectedFriendId) : null;
-    const selectedBalance = selectedFriendId ? getFriendBalance(selectedFriendId) : 0;
 
     return (
         <div className="modal-overlay" onClick={onClose}>
@@ -148,6 +201,26 @@ export default function SettleUpModal({ onClose, preselectedFriendId = null, pre
                                     ))}
                                 </div>
                             </div>
+
+                            {/* UPI Payment Button */}
+                            {method === 'upi' && (
+                                <button
+                                    className="btn btn-accent"
+                                    onClick={openUpiApp}
+                                    disabled={!amount || parseFloat(amount) <= 0}
+                                    style={{
+                                        width: '100%',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '8px',
+                                        marginTop: 'var(--space-md)'
+                                    }}
+                                >
+                                    <ExternalLink size={18} />
+                                    Pay with UPI
+                                </button>
+                            )}
                         </>
                     )}
                 </div>
@@ -164,9 +237,10 @@ export default function SettleUpModal({ onClose, preselectedFriendId = null, pre
                             Back
                         </button>
                         <button
-                            className="btn btn-accent flex-1"
+                            className="btn btn-primary flex-1"
                             onClick={handleSettle}
                             disabled={!amount || parseFloat(amount) <= 0}
+                            style={(!amount || parseFloat(amount) <= 0)? { opacity: 0.5, cursor: 'not-allowed' } : {}}
                         >
                             <Check size={18} />
                             Record Payment

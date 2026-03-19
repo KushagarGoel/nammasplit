@@ -8,7 +8,7 @@ import {
     getIdToken,
 } from 'firebase/auth';
 import { auth } from '../data/firebase';
-import { createUserProfile, getUserProfile, seedDataForUser, getInvitationsForEmail, addFriendLink, deleteInvitation } from '../data/firestore';
+import { createUserProfile, getUserProfile, seedDataForUser, getInvitationsForEmail, addFriendLink, deleteInvitation, getInviteToken, useInviteToken } from '../data/firestore';
 
 const AuthContext = createContext(null);
 
@@ -23,6 +23,7 @@ export function AuthProvider({ children }) {
     const [userProfile, setUserProfile] = useState(null); // firestore profile
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [pendingInviteToken, setPendingInviteToken] = useState(null);
 
     useEffect(() => {
         const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -65,6 +66,17 @@ export function AuthProvider({ children }) {
                 } else {
                     console.log('Skipping invitation processing - isNewUser:', isNewUser, 'email:', firebaseUser.email);
                 }
+
+                // Process invite token if present (for both new and existing users)
+                // Check both state and sessionStorage
+                const tokenToProcess = pendingInviteToken || sessionStorage.getItem('pendingInviteToken');
+                if (tokenToProcess) {
+                    console.log('Processing invite token:', tokenToProcess);
+                    const success = await processInviteToken(tokenToProcess, firebaseUser.uid);
+                    console.log('Invite token processing result:', success);
+                    setPendingInviteToken(null);
+                    sessionStorage.removeItem('pendingInviteToken');
+                }
             } else {
                 console.log('User logged out');
                 setUser(null);
@@ -105,6 +117,17 @@ export function AuthProvider({ children }) {
 
     const clearError = useCallback(() => setError(null), []);
 
+    // Set invite token to be processed after login/signup
+    const setInviteToken = useCallback((token) => {
+        setPendingInviteToken(token);
+        // Also store in sessionStorage to survive page refreshes
+        if (token) {
+            sessionStorage.setItem('pendingInviteToken', token);
+        } else {
+            sessionStorage.removeItem('pendingInviteToken');
+        }
+    }, []);
+
     return (
         <AuthContext.Provider value={{
             user,
@@ -115,6 +138,7 @@ export function AuthProvider({ children }) {
             login,
             logout,
             clearError,
+            setInviteToken,
             isAuthenticated: !!user,
         }}>
             {children}
@@ -137,6 +161,61 @@ async function processPendingInvitations(email, newUserId) {
     } catch (err) {
         console.error('Error processing pending invitations:', err);
         return 0;
+    }
+}
+
+async function processInviteToken(token, currentUserId) {
+    try {
+        const tokenData = await getInviteToken(token);
+        if (!tokenData) {
+            console.log('Invite token not found:', token);
+            return false;
+        }
+        if (tokenData.usedBy) {
+            console.log('Invite token already used:', token);
+            return false;
+        }
+        if (new Date(tokenData.expiresAt) < new Date()) {
+            console.log('Invite token expired:', token);
+            return false;
+        }
+        if (tokenData.userId === currentUserId) {
+            console.log('Cannot use your own invite token');
+            return false;
+        }
+
+        // Create bidirectional friend links
+        console.log(`Processing invite from ${tokenData.userId} to ${currentUserId}`);
+        try {
+            await addFriendLink(tokenData.userId, currentUserId);
+            console.log(`Created friend link: ${tokenData.userId} -> ${currentUserId}`);
+        } catch (err) {
+            console.error(`Failed to create friend link ${tokenData.userId} -> ${currentUserId}:`, err);
+            return false;
+        }
+
+        try {
+            await addFriendLink(currentUserId, tokenData.userId);
+            console.log(`Created friend link: ${currentUserId} -> ${tokenData.userId}`);
+        } catch (err) {
+            console.error(`Failed to create friend link ${currentUserId} -> ${tokenData.userId}:`, err);
+            return false;
+        }
+
+        // Mark token as used
+        try {
+            await useInviteToken(token, currentUserId);
+            console.log('Invite token marked as used');
+        } catch (err) {
+            console.error('Failed to mark token as used:', err);
+            // Don't return false here - friend links are already created
+        }
+
+        console.log('Invite token processed successfully');
+        return true;
+    } catch (err) {
+        console.error('Error processing invite token:', err);
+        return false;
     }
 }
 

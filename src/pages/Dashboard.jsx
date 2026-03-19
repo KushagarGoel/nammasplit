@@ -1,15 +1,12 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowUpRight, ArrowDownLeft, TrendingUp, HandCoins } from 'lucide-react';
+import { ArrowUpRight, ArrowDownLeft, TrendingUp } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { formatINR } from '../utils/currency';
 import { getInitials, getAvatarColor } from '../utils/helpers';
-import SettleUpModal from '../components/SettleUpModal';
 
 export default function Dashboard() {
     const { totalBalances, friendBalances, groups, currentUser } = useApp();
     const navigate = useNavigate();
-    const [showSettle, setShowSettle] = useState(false);
 
     return (
         <div>
@@ -18,34 +15,14 @@ export default function Dashboard() {
                 <p className="page-subtitle">Hey {currentUser.name.split(' ')[0]}, here's your summary</p>
             </div>
 
-            {/* Summary Cards */}
+            {/* Summary Card */}
             <div className="summary-cards">
-                <div className="summary-card highlight">
+                <div className="summary-card highlight" style={{ gridColumn: '1 / -1' }}>
                     <div className="summary-card-label">Total Balance</div>
                     <div className="summary-card-value">
                         {totalBalances.totalBalance >= 0 ? '+' : ''}{formatINR(totalBalances.totalBalance)}
                     </div>
                 </div>
-                <div className="summary-card">
-                    <div className="summary-card-label">You Owe</div>
-                    <div className="summary-card-value negative">
-                        {formatINR(totalBalances.youOwe)}
-                    </div>
-                </div>
-                <div className="summary-card">
-                    <div className="summary-card-label">You're Owed</div>
-                    <div className="summary-card-value positive">
-                        {formatINR(totalBalances.youAreOwed)}
-                    </div>
-                </div>
-            </div>
-
-            {/* Quick Actions */}
-            <div style={{ display: 'flex', gap: 'var(--space-sm)', marginBottom: 'var(--space-lg)' }}>
-                <button className="btn btn-accent flex-1" onClick={() => setShowSettle(true)}>
-                    <HandCoins size={18} />
-                    Settle Up
-                </button>
             </div>
 
             {/* Friend Balances */}
@@ -53,9 +30,12 @@ export default function Dashboard() {
                 <div className="section">
                     <div className="section-header">
                         <h3 className="section-title">Outstanding Balances</h3>
+                        {friendBalances.length > 3 && (
+                            <span className="section-action" onClick={() => navigate('/friends')}>View all</span>
+                        )}
                     </div>
                     <div className="card">
-                        {friendBalances.map(fb => (
+                        {friendBalances.slice(0, 3).map(fb => (
                             <div
                                 key={fb.userId}
                                 className="list-item"
@@ -128,14 +108,12 @@ export default function Dashboard() {
             {friendBalances.length === 0 && (
                 <div className="empty-state">
                     <div className="empty-state-icon">
-                        <HandCoins size={36} />
+                        <TrendingUp size={36} />
                     </div>
                     <h3 className="empty-state-title">All settled up! 🎉</h3>
                     <p className="empty-state-desc">You don't have any outstanding balances. Add an expense to get started.</p>
                 </div>
             )}
-
-            {showSettle && <SettleUpModal onClose={() => setShowSettle(false)} />}
         </div>
     );
 }

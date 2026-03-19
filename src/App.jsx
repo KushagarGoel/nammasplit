@@ -10,6 +10,7 @@ import FriendDetail from './pages/FriendDetail';
 import Activity from './pages/Activity';
 import Account from './pages/Account';
 import Login from './pages/Login';
+import InviteAccept from './pages/InviteAccept';
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
@@ -29,6 +30,7 @@ function AppRoutes() {
       <Route path="/login" element={
         <PublicRoute><Login /></PublicRoute>
       } />
+      <Route path="/invite/:token" element={<InviteAccept />} />
       <Route element={
         <ProtectedRoute>
           <AppProvider>

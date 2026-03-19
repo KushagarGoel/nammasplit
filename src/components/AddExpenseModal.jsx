@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { X, Check, ChevronDown, ChevronUp } from 'lucide-react';
+import { useState } from 'react';
+import { X, Check, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { getInitials, getAvatarColor } from '../utils/helpers';
 import CategoryPicker from './CategoryPicker';
@@ -11,8 +11,9 @@ const SPLIT_TYPES = [
     { id: 'shares', label: 'Shares' },
 ];
 
-export default function AddExpenseModal({ onClose, preselectedGroupId = null, editingExpense = null }) {
+export default function AddExpenseModal({ onClose, preselectedGroupId = null, editingExpense = null, onDelete }) {
     const { currentUser, friends, groups, addExpense, editExpense, getUserById, showToast } = useApp();
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
     const isEditing = !!editingExpense;
 
@@ -44,6 +45,9 @@ export default function AddExpenseModal({ onClose, preselectedGroupId = null, ed
         return [currentUser.id];
     });
 
+    // Track if we're in "edit participants" mode
+    const [editParticipantsMode, setEditParticipantsMode] = useState(false);
+
     // For non-equal splits
     const [exactAmounts, setExactAmounts] = useState(() => {
         if (editingExpense?.splitType === 'exact') {
@@ -61,13 +65,39 @@ export default function AddExpenseModal({ onClose, preselectedGroupId = null, ed
     const [shares, setShares] = useState({});
 
     const handleGroupChange = (newGroupId) => {
+        // Handle the "Create new shared group" option
+        if (newGroupId === '__NEW_SHARED__') {
+            setGroupId(''); // Will trigger group creation on submit
+            return;
+        }
+
         setGroupId(newGroupId);
         if (newGroupId) {
             const group = groups.find(g => g.id === newGroupId);
             setSelectedParticipants(group.members);
         } else {
-            setSelectedParticipants([currentUser.id]);
+            // For personal expenses, only current user is selected by default
+            // When editing, preserve existing participants if not in edit mode
+            if (!isEditing || editParticipantsMode) {
+                setSelectedParticipants([currentUser.id]);
+            }
         }
+    };
+
+    // Toggle edit participants mode
+    const toggleEditParticipants = () => {
+        setEditParticipantsMode(!editParticipantsMode);
+    };
+
+    // Generate a suggested group name based on participants
+    const getSuggestedGroupName = () => {
+        const otherParticipants = selectedParticipants.filter(id => id !== currentUser.id);
+        if (otherParticipants.length === 0) return null;
+        if (otherParticipants.length === 1) {
+            const friend = getUserById(otherParticipants[0]);
+            return `${currentUser.name} & ${friend.name}`;
+        }
+        return `${currentUser.name} & ${otherParticipants.length} others`;
     };
 
     const toggleParticipant = (userId) => {
@@ -134,7 +164,24 @@ export default function AddExpenseModal({ onClose, preselectedGroupId = null, ed
     };
 
     const handleSubmit = async () => {
-        if (!amount || parseFloat(amount) <= 0 || selectedParticipants.length < 2) return;
+        if (!amount || parseFloat(amount) <= 0) return;
+
+        // Check if this is a shared expense (multiple participants) without a group
+        const isSharedExpense = selectedParticipants.length >= 2;
+        const isPersonalExpense = selectedParticipants.length === 1 && selectedParticipants[0] === currentUser.id;
+
+        // For shared expenses without a group, require group creation (only for new expenses)
+        if (isSharedExpense && !groupId && !isEditing) {
+            showToast('Please select or create a group for shared expenses');
+            return;
+        }
+
+        // For editing, if participants changed and expense has groupId, check if new group needed
+        if (isEditing && isSharedExpense && !groupId) {
+            showToast('Shared expenses must be in a group. Please select a group.');
+            return;
+        }
+
         if (!validateSplits()) return;
         setSubmitting(true);
 
@@ -153,6 +200,11 @@ export default function AddExpenseModal({ onClose, preselectedGroupId = null, ed
                 notes,
                 date: new Date(date).toISOString(),
             };
+
+            // For shared expenses, pass suggested group name for auto-creation
+            if (isSharedExpense && !groupId && !isEditing) {
+                expenseData.suggestedGroupName = getSuggestedGroupName();
+            }
 
             if (isEditing) {
                 await editExpense(editingExpense.id, expenseData);
@@ -226,11 +278,25 @@ export default function AddExpenseModal({ onClose, preselectedGroupId = null, ed
                             onChange={e => handleGroupChange(e.target.value)}
                             disabled={isEditing}
                         >
-                            <option value="">No group (Miscellaneous)</option>
+                            <option value="">Personal Expense</option>
+                            <option value="__NEW_SHARED__" disabled={selectedParticipants.length < 2}>
+                                {selectedParticipants.length < 2
+                                    ? 'Select friends to share with...'
+                                    : `+ New: ${getSuggestedGroupName() || 'Shared Expense'}`}
+                            </option>
                             {groups.map(g => (
                                 <option key={g.id} value={g.id}>{g.name}</option>
                             ))}
                         </select>
+                        {selectedParticipants.length >= 2 && !groupId && (
+                            <p style={{
+                                margin: 'var(--space-xs) 0 0 0',
+                                fontSize: '0.8rem',
+                                color: 'var(--text-tertiary)',
+                            }}>
+                                Select a group or choose &quot;New: {getSuggestedGroupName()}&quot; to create one
+                            </p>
+                        )}
                     </div>
 
                     {/* Paid by */}
@@ -251,19 +317,19 @@ export default function AddExpenseModal({ onClose, preselectedGroupId = null, ed
                         </select>
                     </div>
 
-                    {/* Participants (only for non-group) */}
-                    {!groupId && (
+                    {/* Participants selector - always show for adding, show edit mode when editing */}
+                    {(!isEditing || editParticipantsMode) && (
                         <div className="form-group">
                             <label className="form-label">Split with</label>
                             <div className="member-select">
-                                {friends.map(friend => (
+                                {(groupId ? participants : friends).map(person => (
                                     <div
-                                        key={friend.id}
-                                        className={`member-chip ${selectedParticipants.includes(friend.id) ? 'selected' : ''}`}
-                                        onClick={() => toggleParticipant(friend.id)}
+                                        key={person.id}
+                                        className={`member-chip ${selectedParticipants.includes(person.id) ? 'selected' : ''}`}
+                                        onClick={() => toggleParticipant(person.id)}
                                     >
                                         <div className="avatar-sm" style={{
-                                            background: getAvatarColor(friend.name),
+                                            background: getAvatarColor(person.name),
                                             borderRadius: '50%',
                                             display: 'flex',
                                             alignItems: 'center',
@@ -274,11 +340,50 @@ export default function AddExpenseModal({ onClose, preselectedGroupId = null, ed
                                             fontSize: '0.55rem',
                                             fontWeight: 600,
                                         }}>
-                                            {getInitials(friend.name)}
+                                            {getInitials(person.name)}
                                         </div>
-                                        {friend.name.split(' ')[0]}
+                                        {person.id === currentUser.id ? 'You' : person.name.split(' ')[0]}
                                     </div>
                                 ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Show current participants when editing and not in edit mode */}
+                    {isEditing && !editParticipantsMode && (
+                        <div className="form-group">
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-sm)' }}>
+                                <label className="form-label" style={{ margin: 0 }}>Split with</label>
+                                <button
+                                    className="btn btn-secondary"
+                                    onClick={toggleEditParticipants}
+                                    style={{ padding: '4px 12px', fontSize: '0.8rem' }}
+                                >
+                                    Edit Members
+                                </button>
+                            </div>
+                            <div className="member-select" style={{ opacity: 0.7 }}>
+                                {[currentUser, ...friends]
+                                    .filter(u => selectedParticipants.includes(u.id))
+                                    .map(user => (
+                                        <div key={user.id} className="member-chip selected">
+                                            <div className="avatar-sm" style={{
+                                                background: getAvatarColor(user.name),
+                                                borderRadius: '50%',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                color: 'white',
+                                                width: 24,
+                                                height: 24,
+                                                fontSize: '0.55rem',
+                                                fontWeight: 600,
+                                            }}>
+                                                {getInitials(user.name)}
+                                            </div>
+                                            {user.id === currentUser.id ? 'You' : user.name.split(' ')[0]}
+                                        </div>
+                                    ))}
                             </div>
                         </div>
                     )}
@@ -401,18 +506,65 @@ export default function AddExpenseModal({ onClose, preselectedGroupId = null, ed
                     )}
                 </div>
 
-                <div className="modal-footer">
+                <div className="modal-footer" style={{ display: 'flex', gap: 'var(--space-sm)' }}>
+                    {isEditing && onDelete && (
+                        <button
+                            className="btn"
+                            onClick={() => setShowDeleteConfirm(true)}
+                            style={{
+                                background: 'var(--danger)',
+                                color: 'white',
+                                border: 'none',
+                            }}
+                        >
+                            <Trash2 size={18} />
+                        </button>
+                    )}
                     <button className="btn btn-secondary flex-1" onClick={onClose}>Cancel</button>
                     <button
                         className="btn btn-primary flex-1"
                         onClick={handleSubmit}
-                        disabled={submitting || !amount || parseFloat(amount) <= 0 || selectedParticipants.length < 2}
-                        style={(submitting || !amount || parseFloat(amount) <= 0 || selectedParticipants.length < 2) ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+                        disabled={submitting || !amount || parseFloat(amount) <= 0 || (selectedParticipants.length < 2 && !isEditing)}
+                        style={(submitting || !amount || parseFloat(amount) <= 0 || (selectedParticipants.length < 2 && !isEditing)) ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
                     >
                         <Check size={18} />
                         {submitting ? 'Saving...' : isEditing ? 'Save Changes' : 'Add Expense'}
                     </button>
                 </div>
+
+                {/* Delete Confirmation */}
+                {showDeleteConfirm && (
+                    <div className="modal-overlay" style={{ zIndex: 1000 }} onClick={() => setShowDeleteConfirm(false)}>
+                        <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '360px' }}>
+                            <div className="modal-header">
+                                <h2 className="modal-title">Delete Expense</h2>
+                                <button className="modal-close" onClick={() => setShowDeleteConfirm(false)}>
+                                    <X size={20} />
+                                </button>
+                            </div>
+                            <div className="modal-body">
+                                <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
+                                    Are you sure you want to delete "{editingExpense?.description}"? This cannot be undone.
+                                </p>
+                            </div>
+                            <div className="modal-footer">
+                                <button className="btn btn-secondary flex-1" onClick={() => setShowDeleteConfirm(false)}>
+                                    Cancel
+                                </button>
+                                <button
+                                    className="btn flex-1"
+                                    onClick={() => {
+                                        onDelete(editingExpense.id);
+                                        onClose();
+                                    }}
+                                    style={{ background: 'var(--danger)', color: 'white', border: 'none' }}
+                                >
+                                    <Trash2 size={18} /> Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

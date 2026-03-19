@@ -4,11 +4,12 @@ import { createExpense, createSettlement, createActivity, createGroup } from '..
 import { computeBalances, getTotalBalances, getFriendBalances, simplifyDebts, getGroupBalances, getNetBalance } from '../data/balanceEngine';
 import { formatINR } from '../utils/currency';
 import {
-    saveExpense, updateExpense, removeExpense,
-    saveSettlement, saveGroup, updateGroup, removeGroup,
+    saveExpense, updateExpense, removeExpense, removeExpensesByGroup,
+    saveSettlement, saveGroup, getGroup, updateGroup, removeGroup, removeSettlementsByGroup,
     saveActivity, subscribeToUserData,
     getFriendIds, getUserProfile, addFriendLink, getUserByEmail,
     createInvitation, getInvitationsForEmail, deleteInvitation,
+    getUsersByIds,
 } from '../data/firestore';
 
 const AppContext = createContext(null);
@@ -32,6 +33,7 @@ export function AppProvider({ children }) {
     const [toast, setToast] = useState(null);
     const [loading, setLoading] = useState(true);
     const unsubRef = useRef(null);
+    const [extraUsers, setExtraUsers] = useState({}); // Cache for users not in friends list
 
     const currentUser = userProfile ? {
         id: userProfile.id || userProfile.uid,
@@ -89,16 +91,39 @@ export function AppProvider({ children }) {
         ? getFriendBalances(balances, currentUser.id, data.friends)
         : [];
 
+    // Fetch unknown users (for group members not in friends list)
+    const fetchUnknownUsers = useCallback(async (userIds) => {
+        const unknownIds = userIds.filter(id => !allUsers.find(u => u.id === id) && !extraUsers[id]);
+        if (unknownIds.length === 0) return;
+
+        try {
+            const users = await getUsersByIds(unknownIds);
+            setExtraUsers(prev => {
+                const next = { ...prev };
+                users.forEach(u => { next[u.id] = u; });
+                return next;
+            });
+        } catch (err) {
+            console.error('Failed to fetch unknown users:', err);
+        }
+    }, [allUsers, extraUsers]);
+
     const getUserById = useCallback((id) => {
-        return allUsers.find(u => u.id === id) || { id, name: 'Unknown', email: '' };
-    }, [allUsers]);
+        const user = allUsers.find(u => u.id === id) || extraUsers[id];
+        return user || { id, name: 'Unknown', email: '' };
+    }, [allUsers, extraUsers]);
 
     const getGroupById = useCallback((id) => {
         if (!id) {
-            return { id: null, name: 'Miscellaneous', members: [currentUser.id] };
+            return { id: null, name: 'Personal', members: [currentUser.id] };
         }
-        return data.groups.find(g => g.id === id);
-    }, [data.groups, currentUser.id]);
+        const group = data.groups.find(g => g.id === id);
+        // Fetch unknown group members
+        if (group?.members) {
+            fetchUnknownUsers(group.members);
+        }
+        return group;
+    }, [data.groups, currentUser.id, fetchUnknownUsers]);
 
     const getExpensesByGroup = useCallback((groupId) => {
         return data.expenses
@@ -109,7 +134,9 @@ export function AppProvider({ children }) {
     const getExpensesBetweenFriends = useCallback((friendId) => {
         return data.expenses
             .filter(e => {
-                if (e.groupId) return false;
+                // Include expenses with no group OR from auto-created shared groups
+                const isAutoCreatedGroup = e.groupId?.startsWith('grp-');
+                if (e.groupId && !isAutoCreatedGroup) return false;
                 const involvesCurrent = e.paidBy === currentUser.id || e.splits.some(s => s.userId === currentUser.id);
                 const involvesFriend = e.paidBy === friendId || e.splits.some(s => s.userId === friendId);
                 return involvesCurrent && involvesFriend;
@@ -139,60 +166,79 @@ export function AppProvider({ children }) {
     // ===== ACTIONS =====
     const addExpense = useCallback(async (expenseData) => {
         let finalGroupId = expenseData.groupId;
+        const { suggestedGroupName, ...restExpenseData } = expenseData;
 
         // Get all participants from splits before creating expense
         const involvedUsers = [...new Set([expenseData.paidBy, ...expenseData.splits.map(s => s.userId)])];
+        const isPersonalExpense = involvedUsers.length === 1 && involvedUsers[0] === currentUser.id;
 
-        // If no group selected, create/use Miscellaneous group
-        if (!finalGroupId) {
-            const miscGroupId = `misc-${currentUser.id}`;
-            const existingMisc = data.groups.find(g => g.id === miscGroupId);
-            if (!existingMisc) {
-                // Create Miscellaneous group with all participants
-                const miscGroup = createGroup({
-                    name: 'Miscellaneous',
-                    members: involvedUsers,
-                    createdBy: currentUser.id,
-                });
-                miscGroup.id = miscGroupId;
-                await saveGroup(miscGroup);
-            } else {
-                // Update existing Miscellaneous group to include all participants
-                const currentMembers = new Set(existingMisc.members);
-                const newMembers = involvedUsers.filter(id => !currentMembers.has(id));
-                if (newMembers.length > 0) {
-                    await updateGroup(miscGroupId, {
-                        members: [...existingMisc.members, ...newMembers]
-                    });
-                }
+        // For shared expenses without a group, create a new named group
+        if (!finalGroupId && !isPersonalExpense) {
+            // Generate a unique group ID based on sorted participants and timestamp
+            const sortedUserIds = [...involvedUsers].sort().join('-');
+            const groupId = `grp-${sortedUserIds}-${Date.now()}`;
+
+            // Use suggested name or generate default
+            const groupName = suggestedGroupName || `${currentUser.name} & Friends`;
+
+            const newGroup = createGroup({
+                name: groupName,
+                members: involvedUsers,
+                createdBy: currentUser.id,
+            });
+            newGroup.id = groupId;
+
+            try {
+                await saveGroup(newGroup);
+            } catch (err) {
+                console.error('Failed to create group:', err);
+                throw new Error('Failed to create group: ' + err.message);
             }
-            finalGroupId = miscGroupId;
+
+            finalGroupId = groupId;
         }
 
-        const expense = createExpense({ ...expenseData, groupId: finalGroupId });
-        // Add involvedUsers for Firestore query (already computed above)
+        const expense = createExpense({ ...restExpenseData, groupId: finalGroupId });
+        // Add involvedUsers for Firestore query
         expense.involvedUsers = involvedUsers;
 
         const payer = getUserById(expense.paidBy);
-        const groupName = getGroupById(expense.groupId)?.name || 'Miscellaneous';
+        const groupName = isPersonalExpense
+            ? 'Personal'
+            : (getGroupById(expense.groupId)?.name || 'Shared');
+
+        // Ensure activity involvedUsers always includes the payer (for security rules)
+        const activityInvolvedUsers = [...new Set([expense.paidBy, ...involvedUsers])];
 
         const activity = createActivity({
             type: 'expense_added',
-            description: `${payer.name} added "${expense.description}" in ${groupName}`,
+            description: `${payer.name} added "${expense.description}"${isPersonalExpense ? '' : ` in ${groupName}`}`,
             userId: expense.paidBy,
             groupId: expense.groupId,
             expenseId: expense.id,
             amount: expense.amount,
-            involvedUsers,
+            involvedUsers: activityInvolvedUsers,
         });
 
         // Save to Firestore (real-time listener will update local state)
-        await Promise.all([
-            saveExpense(expense),
-            saveActivity(activity),
-        ]);
+        try {
+            await saveExpense(expense);
+        } catch (err) {
+            console.error('Failed to save expense:', err, 'Expense data:', expense);
+            throw new Error('Failed to save expense: ' + err.message);
+        }
 
-        showToast(`Added "${expense.description}" — ${formatINR(expense.amount)}`);
+        try {
+            await saveActivity(activity);
+        } catch (err) {
+            console.error('Failed to save activity:', err, 'Activity data:', activity);
+            throw new Error('Failed to save activity: ' + err.message);
+        }
+
+        const toastMessage = isPersonalExpense
+            ? `Added "${expense.description}" — ${formatINR(expense.amount)}`
+            : `Added "${expense.description}" to ${groupName} — ${formatINR(expense.amount)}`;
+        showToast(toastMessage);
         return expense;
     }, [getUserById, getGroupById, showToast, data.groups, currentUser.id]);
 
@@ -269,11 +315,26 @@ export function AppProvider({ children }) {
     }, [getUserById, currentUser.id, showToast]);
 
     const addGroup = useCallback(async (name, memberIds) => {
+        const allMembers = [currentUser.id, ...memberIds];
         const group = createGroup({
             name,
-            members: [currentUser.id, ...memberIds],
+            members: allMembers,
             createdBy: currentUser.id,
         });
+
+        // Create friend links between all group members (full mesh)
+        const friendLinkPromises = [];
+        for (let i = 0; i < allMembers.length; i++) {
+            for (let j = i + 1; j < allMembers.length; j++) {
+                const userA = allMembers[i];
+                const userB = allMembers[j];
+                // Create bidirectional friend links
+                friendLinkPromises.push(
+                    addFriendLink(userA, userB).catch(() => {}),
+                    addFriendLink(userB, userA).catch(() => {})
+                );
+            }
+        }
 
         const activity = createActivity({
             type: 'group_created',
@@ -286,6 +347,7 @@ export function AppProvider({ children }) {
         await Promise.all([
             saveGroup(group),
             saveActivity(activity),
+            ...friendLinkPromises,
         ]);
 
         showToast(`Created group "${name}"`);
@@ -299,6 +361,15 @@ export function AppProvider({ children }) {
 
         const newMembers = [...group.members, friendId];
 
+        // Create friend links between new member and all existing group members
+        const friendLinkPromises = [];
+        for (const existingMemberId of group.members) {
+            friendLinkPromises.push(
+                addFriendLink(friendId, existingMemberId).catch(() => {}),
+                addFriendLink(existingMemberId, friendId).catch(() => {})
+            );
+        }
+
         const activity = createActivity({
             type: 'group_created',
             description: `${currentUser.name} added ${friend.name} to "${group.name}"`,
@@ -310,6 +381,7 @@ export function AppProvider({ children }) {
         await Promise.all([
             updateGroup(groupId, { members: newMembers }),
             saveActivity(activity),
+            ...friendLinkPromises,
         ]);
 
         showToast(`Added ${friend.name} to ${group.name}`);
@@ -333,6 +405,9 @@ export function AppProvider({ children }) {
             involvedUsers: group.members,
         });
 
+        // Delete all expenses and settlements for this group, then the group itself
+        await removeExpensesByGroup(groupId);
+        await removeSettlementsByGroup(groupId);
         await Promise.all([
             removeGroup(groupId),
             saveActivity(activity),

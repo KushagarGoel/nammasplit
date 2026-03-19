@@ -11,18 +11,20 @@ import SettleUpModal from '../components/SettleUpModal';
 export default function FriendDetail() {
     const { id } = useParams();
     const navigate = useNavigate();
-    const { getUserById, getExpensesBetweenFriends, getFriendBalance, expenses, currentUser } = useApp();
+    const { getUserById, getExpensesBetweenFriends, getFriendBalance, expenses, currentUser, deleteExpense } = useApp();
 
     const [showAddExpense, setShowAddExpense] = useState(false);
     const [showSettle, setShowSettle] = useState(false);
+    const [editingExpense, setEditingExpense] = useState(null);
 
     const friend = getUserById(id);
     const balance = getFriendBalance(id);
     const directExpenses = getExpensesBetweenFriends(id);
 
-    // Also get group expenses between the two users
+    // Also get group expenses between the two users (from named groups)
     const groupExpenses = expenses
         .filter(e => {
+            // Include named groups (not personal expenses with no group)
             if (!e.groupId) return false;
             const involvesCurrent = e.paidBy === currentUser.id || e.splits.some(s => s.userId === currentUser.id);
             const involvesFriend = e.paidBy === id || e.splits.some(s => s.userId === id);
@@ -30,7 +32,10 @@ export default function FriendDetail() {
         })
         .sort((a, b) => new Date(b.date) - new Date(a.date));
 
-    const allExpenses = [...directExpenses, ...groupExpenses].sort((a, b) => new Date(b.date) - new Date(a.date));
+    // Combine and deduplicate by expense ID
+    const expenseMap = new Map();
+    [...directExpenses, ...groupExpenses].forEach(e => expenseMap.set(e.id, e));
+    const allExpenses = Array.from(expenseMap.values()).sort((a, b) => new Date(b.date) - new Date(a.date));
 
     return (
         <div>
@@ -116,14 +121,28 @@ export default function FriendDetail() {
                         </div>
                     ) : (
                         allExpenses.map(expense => (
-                            <ExpenseCard key={expense.id} expense={expense} />
+                            <ExpenseCard
+                                key={expense.id}
+                                expense={expense}
+                                onClick={() => {
+                                    setEditingExpense(expense);
+                                    setShowAddExpense(true);
+                                }}
+                            />
                         ))
                     )}
                 </div>
             </div>
 
             {showAddExpense && (
-                <AddExpenseModal onClose={() => setShowAddExpense(false)} />
+                <AddExpenseModal
+                    onClose={() => {
+                        setShowAddExpense(false);
+                        setEditingExpense(null);
+                    }}
+                    editingExpense={editingExpense}
+                    onDelete={deleteExpense}
+                />
             )}
 
             {showSettle && (
