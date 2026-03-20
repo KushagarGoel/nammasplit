@@ -11,6 +11,8 @@ import Activity from './pages/Activity';
 import Account from './pages/Account';
 import Login from './pages/Login';
 import InviteAccept from './pages/InviteAccept';
+import RestaurantSession from './pages/RestaurantSession';
+import Restaurants from './pages/Restaurants';
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
@@ -31,6 +33,13 @@ function AppRoutes() {
         <PublicRoute><Login /></PublicRoute>
       } />
       <Route path="/invite/:token" element={<InviteAccept />} />
+      <Route path="/order/:sessionId" element={
+        <ProtectedRoute>
+          <AppProvider>
+            <RestaurantSession />
+          </AppProvider>
+        </ProtectedRoute>
+      } />
       <Route element={
         <ProtectedRoute>
           <AppProvider>
@@ -45,6 +54,7 @@ function AppRoutes() {
         <Route path="/friends/:id" element={<FriendDetail />} />
         <Route path="/activity" element={<Activity />} />
         <Route path="/account" element={<Account />} />
+        <Route path="/restaurants" element={<Restaurants />} />
       </Route>
     </Routes>
   );

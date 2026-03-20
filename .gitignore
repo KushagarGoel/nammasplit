@@ -25,3 +25,13 @@ dist-ssr
 
 
 .env
+
+# Python
+api/__pycache__/
+api/*.py[cod]
+api/*$py.class
+api/.Python
+api/venv/
+api/env/
+
+random

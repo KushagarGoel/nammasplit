@@ -492,3 +492,170 @@ export async function useInviteToken(token, usedByUserId) {
         usedAt: new Date().toISOString(),
     });
 }
+
+// ===== RESTAURANT & GROUP ORDERING =====
+
+const restaurantsCol = () => collection(db, 'restaurants');
+const orderingSessionsCol = () => collection(db, 'orderingSessions');
+const cartItemsCol = () => collection(db, 'cartItems');
+
+// === RESTAURANTS ===
+
+export async function saveRestaurant(restaurant) {
+    await setDoc(doc(db, 'restaurants', restaurant.id), restaurant);
+}
+
+export async function getRestaurant(restaurantId) {
+    const snap = await getDoc(doc(db, 'restaurants', restaurantId));
+    return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+export async function getUserRestaurants(userId) {
+    const q = query(restaurantsCol(), where('createdBy', '==', userId));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+export async function updateRestaurant(restaurantId, data) {
+    await updateDoc(doc(db, 'restaurants', restaurantId), data);
+}
+
+export async function removeRestaurant(restaurantId) {
+    // Delete all menu items and ordering sessions first
+    const sessionsQuery = query(orderingSessionsCol(), where('restaurantId', '==', restaurantId));
+    const sessionsSnap = await getDocs(sessionsQuery);
+
+    const batch = writeBatch(db);
+    for (const sessionDoc of sessionsSnap.docs) {
+        const cartQuery = query(cartItemsCol(), where('sessionId', '==', sessionDoc.id));
+        const cartSnap = await getDocs(cartQuery);
+        cartSnap.docs.forEach(d => batch.delete(d.ref));
+        batch.delete(sessionDoc.ref);
+    }
+    batch.delete(doc(db, 'restaurants', restaurantId));
+    await batch.commit();
+}
+
+// === ORDERING SESSIONS ===
+
+export async function saveOrderingSession(session) {
+    await setDoc(doc(db, 'orderingSessions', session.id), session);
+}
+
+export async function getOrderingSession(sessionId) {
+    try {
+        const snap = await getDoc(doc(db, 'orderingSessions', sessionId));
+        return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+    } catch (err) {
+        // If permission denied, return null to allow join flow to proceed
+        if (err.code === 'permission-denied') {
+            return null;
+        }
+        throw err;
+    }
+}
+
+export async function updateOrderingSession(sessionId, data) {
+    await updateDoc(doc(db, 'orderingSessions', sessionId), data);
+}
+
+export async function joinOrderingSession(sessionId, userId) {
+    const sessionRef = doc(db, 'orderingSessions', sessionId);
+    const sessionSnap = await getDoc(sessionRef);
+
+    if (!sessionSnap.exists()) {
+        throw new Error('Session not found');
+    }
+
+    const session = sessionSnap.data();
+    if (!session.participants.includes(userId)) {
+        await updateDoc(sessionRef, {
+            participants: [...session.participants, userId],
+        });
+    }
+}
+
+export async function getActiveSessionsForUser(userId) {
+    const q = query(
+        orderingSessionsCol(),
+        where('participants', 'array-contains', userId),
+        where('status', '==', 'active')
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+// === CART ITEMS ===
+
+export async function saveCartItem(cartItem) {
+    await setDoc(doc(db, 'cartItems', cartItem.id), cartItem);
+}
+
+export async function updateCartItem(cartItemId, data) {
+    await updateDoc(doc(db, 'cartItems', cartItemId), {
+        ...data,
+        updatedAt: new Date().toISOString(),
+    });
+}
+
+export async function removeCartItem(cartItemId) {
+    await deleteDoc(doc(db, 'cartItems', cartItemId));
+}
+
+export async function getCartItemsForSession(sessionId) {
+    const q = query(cartItemsCol(), where('sessionId', '==', sessionId));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+export async function getUserCartForSession(sessionId, userId) {
+    const q = query(
+        cartItemsCol(),
+        where('sessionId', '==', sessionId),
+        where('userId', '==', userId)
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+export async function clearUserCart(sessionId, userId) {
+    const q = query(
+        cartItemsCol(),
+        where('sessionId', '==', sessionId),
+        where('userId', '==', userId)
+    );
+    const snap = await getDocs(q);
+    const batch = writeBatch(db);
+    snap.docs.forEach(d => batch.delete(d.ref));
+    await batch.commit();
+}
+
+// === REAL-TIME LISTENERS FOR ORDERING ===
+
+export function subscribeToSession(sessionId, onSessionUpdate) {
+    return onSnapshot(doc(db, 'orderingSessions', sessionId), (snap) => {
+        if (snap.exists()) {
+            onSessionUpdate({ id: snap.id, ...snap.data() });
+        } else {
+            onSessionUpdate(null);
+        }
+    });
+}
+
+export function subscribeToCartItems(sessionId, onCartUpdate) {
+    const q = query(cartItemsCol(), where('sessionId', '==', sessionId));
+    return onSnapshot(q, (snap) => {
+        const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        onCartUpdate(items);
+    });
+}
+
+export function subscribeToRestaurant(restaurantId, onRestaurantUpdate) {
+    return onSnapshot(doc(db, 'restaurants', restaurantId), (snap) => {
+        if (snap.exists()) {
+            onRestaurantUpdate({ id: snap.id, ...snap.data() });
+        } else {
+            onRestaurantUpdate(null);
+        }
+    });
+}

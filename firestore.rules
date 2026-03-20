@@ -126,5 +126,54 @@ service cloud.firestore {
         && request.resource.data.usedAt is string;
       allow delete: if false; // Tokens are never deleted
     }
+
+    // Restaurants collection - for group ordering feature
+    match /restaurants/{restaurantId} {
+      // Anyone authenticated can read restaurants
+      allow read: if isAuthenticated();
+      // Anyone authenticated can create restaurants
+      allow create: if isAuthenticated();
+      // Only creator can update/delete
+      allow update, delete: if isAuthenticated() && request.auth.uid == resource.data.createdBy;
+    }
+
+    // Ordering Sessions collection - for group ordering
+    match /orderingSessions/{sessionId} {
+      // Allow read if:
+      // - user is a participant or the creator, OR
+      // - session is active (allows friends to join via shared link)
+      allow read: if isAuthenticated() && (
+        request.auth.uid in resource.data.participants ||
+        request.auth.uid == resource.data.createdBy ||
+        resource.data.status == 'active'
+      );
+      // Allow create if authenticated
+      allow create: if isAuthenticated();
+      // Allow update if user is already a participant or the creator
+      // OR if they're joining the session (adding self to participants)
+      allow update: if isAuthenticated() && (
+        request.auth.uid in resource.data.participants ||
+        request.auth.uid == resource.data.createdBy ||
+        (request.auth.uid in request.resource.data.participants &&
+         resource.data.status == 'active')
+      );
+      // Only creator can delete
+      allow delete: if isAuthenticated() && request.auth.uid == resource.data.createdBy;
+    }
+
+    // Cart Items collection - for group ordering
+    match /cartItems/{cartItemId} {
+      // Allow read if user owns the item or is a participant in the session
+      allow read: if isAuthenticated() && (
+        request.auth.uid == resource.data.userId ||
+        request.auth.uid in get(/databases/$(database)/documents/orderingSessions/$(resource.data.sessionId)).data.participants
+      );
+      // Allow create if user owns the item
+      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.userId;
+      // Allow update if user owns the item
+      allow update: if isAuthenticated() && request.auth.uid == resource.data.userId;
+      // Allow delete if user owns the item
+      allow delete: if isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
   }
 }

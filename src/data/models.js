@@ -71,3 +71,59 @@ export function createActivity({ type, description, userId, groupId = null, expe
         timestamp: new Date().toISOString(),
     };
 }
+
+// ===== Restaurant & Group Ordering Models =====
+
+export function createRestaurant({ name, address = '', phone = '', cuisine = '', createdBy, imageUrl = null }) {
+    return {
+        id: generateId(),
+        name,
+        address,
+        phone,
+        cuisine,
+        imageUrl,
+        createdBy,
+        createdAt: new Date().toISOString(),
+    };
+}
+
+export function createMenuItem({ name, description = null, price, category = 'UNKNOWN' }) {
+    return {
+        id: generateId(),
+        name,
+        description: description || null,
+        price: parseFloat(price),
+        category, // 'VEG' | 'NON_VEG' | 'UNKNOWN'
+        createdAt: new Date().toISOString(),
+    };
+}
+
+export function createOrderingSession({ restaurantId, restaurantName, createdBy, hostName }) {
+    return {
+        id: generateId(),
+        restaurantId,
+        restaurantName,
+        createdBy,
+        hostName,
+        status: 'active', // 'active' | 'completed' | 'cancelled'
+        participants: [createdBy],
+        createdAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24 hours
+    };
+}
+
+export function createCartItem({ sessionId, userId, userName, menuItemId, menuItemName, price, quantity = 1, specialInstructions = '' }) {
+    return {
+        id: generateId(),
+        sessionId,
+        userId,
+        userName,
+        menuItemId,
+        menuItemName,
+        price: parseFloat(price),
+        quantity: parseInt(quantity, 10),
+        specialInstructions,
+        addedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+    };
+}

@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { ArrowUpRight, ArrowDownLeft, TrendingUp } from 'lucide-react';
+import { ArrowUpRight, ArrowDownLeft, TrendingUp, Utensils, Users, ArrowRight } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { formatINR } from '../utils/currency';
 import { getInitials, getAvatarColor } from '../utils/helpers';
@@ -21,6 +21,42 @@ export default function Dashboard() {
                     <div className="summary-card-label">Total Balance</div>
                     <div className="summary-card-value">
                         {totalBalances.totalBalance >= 0 ? '+' : ''}{formatINR(totalBalances.totalBalance)}
+                    </div>
+                </div>
+            </div>
+
+            {/* Group Order Section */}
+            <div className="section">
+                <div
+                    className="card card-clickable group-order-card"
+                    onClick={() => navigate('/restaurants')}
+                    style={{
+                        background: 'linear-gradient(135deg, var(--primary), var(--accent))',
+                        border: 'none',
+                        color: 'white'
+                    }}
+                >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
+                        <div style={{
+                            width: 48,
+                            height: 48,
+                            borderRadius: 'var(--radius-md)',
+                            background: 'rgba(255,255,255,0.2)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}>
+                            <Utensils size={24} />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: 700, fontSize: '1.05rem', marginBottom: 2 }}>
+                                Group Order
+                            </div>
+                            <div style={{ fontSize: '0.85rem', opacity: 0.9 }}>
+                                Order food together with friends
+                            </div>
+                        </div>
+                        <ArrowRight size={20} style={{ opacity: 0.8 }} />
                     </div>
                 </div>
             </div>
