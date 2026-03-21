@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, HandCoins, Plus, ReceiptText } from 'lucide-react';
+import { ArrowLeft, HandCoins, Plus, ReceiptText, Copy } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { formatINR } from '../utils/currency';
 import { getInitials, getAvatarColor } from '../utils/helpers';
@@ -12,16 +12,37 @@ import SettleUpModal from '../components/SettleUpModal';
 export default function FriendDetail() {
     const { id } = useParams();
     const navigate = useNavigate();
-    const { getUserById, getExpensesBetweenFriends, getFriendBalance, getSettlementsWithFriend, expenses, currentUser, deleteExpense } = useApp();
+    const { getUserById, getExpensesBetweenFriends, getFriendBalance, getSettlementsWithFriend, expenses, currentUser, deleteExpense, showToast } = useApp();
 
     const [showAddExpense, setShowAddExpense] = useState(false);
     const [showSettle, setShowSettle] = useState(false);
     const [editingExpense, setEditingExpense] = useState(null);
+    const [upiCopied, setUpiCopied] = useState(false);
 
     const friend = getUserById(id);
     const balance = getFriendBalance(id);
     const directExpenses = getExpensesBetweenFriends(id);
     const settlements = getSettlementsWithFriend(id);
+
+    const handleCopyUpi = async (upiId) => {
+        try {
+            await navigator.clipboard.writeText(upiId);
+            setUpiCopied(true);
+            showToast('UPI ID copied!');
+            setTimeout(() => setUpiCopied(false), 2000);
+        } catch (err) {
+            // Fallback
+            const textArea = document.createElement('textarea');
+            textArea.value = upiId;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            setUpiCopied(true);
+            showToast('UPI ID copied!');
+            setTimeout(() => setUpiCopied(false), 2000);
+        }
+    };
 
     // Also get group expenses between the two users (from named groups)
     const groupExpenses = expenses
@@ -65,6 +86,35 @@ export default function FriendDetail() {
                 {friend.email && (
                     <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: 4 }}>
                         {friend.email}
+                    </p>
+                )}
+                {friend.upiId && (
+                    <p style={{
+                        color: 'var(--primary)',
+                        fontSize: '0.85rem',
+                        marginTop: 4,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px'
+                    }}>
+                        {friend.upiId}
+                        <button
+                            onClick={() => handleCopyUpi(friend.upiId)}
+                            style={{
+                                background: 'none',
+                                border: 'none',
+                                padding: '2px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                color: 'var(--text-secondary)',
+                                marginLeft: '2px'
+                            }}
+                            title="Copy UPI ID"
+                        >
+                            {upiCopied ? <span style={{ fontSize: '0.75rem' }}>✓</span> : <Copy size={12} />}
+                        </button>
                     </p>
                 )}
 

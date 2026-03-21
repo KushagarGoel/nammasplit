@@ -502,7 +502,7 @@ export function AppProvider({ children }) {
         }
 
         const activity = createActivity({
-            type: 'group_created',
+            type: 'group_member_added',
             description: `${currentUser.name} added ${friend.name} to "${group.name}"`,
             userId: currentUser.id,
             groupId,
@@ -529,7 +529,7 @@ export function AppProvider({ children }) {
         }
 
         const activity = createActivity({
-            type: 'group_created',
+            type: 'group_deleted',
             description: `${currentUser.name} deleted group "${group.name}"`,
             userId: currentUser.id,
             groupId,
@@ -609,7 +609,7 @@ export function AppProvider({ children }) {
 
                 // Save activity for the invitation
                 const activity = createActivity({
-                    type: 'friend_added',
+                    type: 'friend_invited',
                     description: `${currentUser.name} invited ${name} to join`,
                     userId: currentUser.id,
                     involvedUsers: [currentUser.id],
@@ -667,6 +667,23 @@ export function AppProvider({ children }) {
         addMemberToGroup,
         deleteGroup,
         addFriend,
+        editGroupName: async (groupId, newName) => {
+            const group = data.groups.find(g => g.id === groupId);
+            if (!group) return;
+            const oldName = group.name;
+            await updateGroup(groupId, { name: newName.trim() });
+
+            const activity = createActivity({
+                type: 'group_updated',
+                description: `${currentUser.name} renamed "${oldName}" to "${newName.trim()}"`,
+                userId: currentUser.id,
+                groupId,
+                involvedUsers: group.members,
+            });
+            await saveActivity(activity);
+
+            showToast(`Renamed to "${newName.trim()}"`);
+        },
 
         // UI
         toast,

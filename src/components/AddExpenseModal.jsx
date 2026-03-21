@@ -66,12 +66,6 @@ export default function AddExpenseModal({ onClose, preselectedGroupId = null, pr
     const [shares, setShares] = useState({});
 
     const handleGroupChange = (newGroupId) => {
-        // Handle the "Create new shared group" option
-        if (newGroupId === '__NEW_SHARED__') {
-            setGroupId(''); // Will trigger group creation on submit
-            return;
-        }
-
         setGroupId(newGroupId);
         if (newGroupId) {
             const group = groups.find(g => g.id === newGroupId);
@@ -286,22 +280,17 @@ export default function AddExpenseModal({ onClose, preselectedGroupId = null, pr
                             disabled={isEditing}
                         >
                             <option value="">Personal Expense</option>
-                            <option value="__NEW_SHARED__" disabled={selectedParticipants.length < 2}>
-                                {selectedParticipants.length < 2
-                                    ? 'Select friends to share with...'
-                                    : `+ New: ${getSuggestedGroupName() || 'Shared Expense'}`}
-                            </option>
                             {groups.map(g => (
                                 <option key={g.id} value={g.id}>{g.name}</option>
                             ))}
                         </select>
-                        {selectedParticipants.length >= 2 && !groupId && (
+                        {selectedParticipants.length >= 2 && !groupId && groups.length === 0 && (
                             <p style={{
                                 margin: 'var(--space-xs) 0 0 0',
                                 fontSize: '0.8rem',
                                 color: 'var(--text-tertiary)',
                             }}>
-                                Select a group or choose &quot;New: {getSuggestedGroupName()}&quot; to create one
+                                Create a group first to add shared expenses
                             </p>
                         )}
                     </div>

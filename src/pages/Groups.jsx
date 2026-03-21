@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Users, X, Check } from 'lucide-react';
+import { Plus, Users, X, Check, Search } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { getInitials, getAvatarColor } from '../utils/helpers';
 import { formatINR } from '../utils/currency';
@@ -12,13 +12,20 @@ export default function Groups() {
     const [newName, setNewName] = useState('');
     const [selectedMembers, setSelectedMembers] = useState([]);
 
+    const [friendSearch, setFriendSearch] = useState('');
+
     const handleOpenCreateGroup = () => {
         if (friends.length === 0) {
             showToast('Add friends first to create a group');
             return;
         }
         setShowCreate(true);
+        setFriendSearch('');
     };
+
+    const filteredFriends = friends.filter(f =>
+        f.name.toLowerCase().includes(friendSearch.toLowerCase())
+    );
 
     const handleCreateGroup = async () => {
         console.log('Creating group with name:', newName, 'and members:', selectedMembers);
@@ -154,8 +161,19 @@ export default function Groups() {
                             </div>
                             <div className="form-group">
                                 <label className="form-label">Add members</label>
+                                <div className="search-bar" style={{ marginBottom: 'var(--space-sm)' }}>
+                                    <Search size={16} />
+                                    <input
+                                        type="text"
+                                        className="form-input"
+                                        value={friendSearch}
+                                        onChange={e => setFriendSearch(e.target.value)}
+                                        placeholder="Search friends..."
+                                        style={{ paddingLeft: 36, fontSize: '0.9rem' }}
+                                    />
+                                </div>
                                 <div className="member-select">
-                                    {friends.map(friend => (
+                                    {filteredFriends.map(friend => (
                                         <div
                                             key={friend.id}
                                             className={`member-chip ${selectedMembers.includes(friend.id) ? 'selected' : ''}`}
@@ -173,6 +191,11 @@ export default function Groups() {
                                         </div>
                                     ))}
                                 </div>
+                                {filteredFriends.length === 0 && friendSearch && (
+                                    <p style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', textAlign: 'center', marginTop: 'var(--space-sm)' }}>
+                                        No friends match &quot;{friendSearch}&quot;
+                                    </p>
+                                )}
                             </div>
                         </div>
                         <div className="modal-footer">
