@@ -5,6 +5,7 @@ import { useApp } from '../context/AppContext';
 import { formatINR } from '../utils/currency';
 import { getInitials, getAvatarColor } from '../utils/helpers';
 import { createInviteToken } from '../data/firestore';
+import ShareOptions from '../components/ShareOptions';
 
 export default function Friends() {
     const { currentUser, friends, getFriendBalance, showToast } = useApp();
@@ -14,6 +15,7 @@ export default function Friends() {
     const [inviteLink, setInviteLink] = useState('');
     const [generatingLink, setGeneratingLink] = useState(false);
     const [linkCopied, setLinkCopied] = useState(false);
+    const [showShareOptions, setShowShareOptions] = useState(false);
 
     const generateInviteLink = async () => {
         setGeneratingLink(true);
@@ -47,20 +49,8 @@ export default function Friends() {
         }
     };
 
-    const shareInvite = async () => {
-        try {
-            if (navigator.share) {
-                await navigator.share({
-                    title: 'Join me on NammaSplit',
-                    text: `Connect with me on NammaSplit to split expenses!`,
-                    url: inviteLink,
-                });
-            } else {
-                copyToClipboard();
-            }
-        } catch (err) {
-            // User cancelled or share failed
-        }
+    const shareInvite = () => {
+        setShowShareOptions(true);
     };
 
     const filteredFriends = friends.filter(f =>
@@ -278,6 +268,16 @@ export default function Friends() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Share Options Modal */}
+            {showShareOptions && inviteLink && (
+                <ShareOptions
+                    link={inviteLink}
+                    title="Join me on NammaSplit"
+                    message={`Connect with me on NammaSplit to split expenses!`}
+                    onClose={() => setShowShareOptions(false)}
+                />
             )}
         </div>
     );

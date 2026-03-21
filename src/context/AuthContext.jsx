@@ -2,13 +2,14 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import {
     createUserWithEmailAndPassword,
     signInWithEmailAndPassword,
+    signInWithPopup,
+    GoogleAuthProvider,
     signOut,
     onAuthStateChanged,
     updateProfile,
-    getIdToken,
 } from 'firebase/auth';
 import { auth } from '../data/firebase';
-import { createUserProfile, getUserProfile, seedDataForUser, getInvitationsForEmail, addFriendLink, deleteInvitation, getInviteToken, useInviteToken } from '../data/firestore';
+import { createUserProfile, getUserProfile, updateUserProfile as updateUserProfileInFirestore, getInvitationsForEmail, addFriendLink, deleteInvitation, getInviteToken, useInviteToken } from '../data/firestore';
 
 const AuthContext = createContext(null);
 
@@ -115,7 +116,29 @@ export function AuthProvider({ children }) {
         await signOut(auth);
     }, []);
 
+    const signInWithGoogle = useCallback(async () => {
+        setError(null);
+        try {
+            const provider = new GoogleAuthProvider();
+            provider.setCustomParameters({
+                prompt: 'select_account'
+            });
+            const cred = await signInWithPopup(auth, provider);
+            return cred.user;
+        } catch (err) {
+            setError(getErrorMessage(err.code));
+            throw err;
+        }
+    }, []);
+
     const clearError = useCallback(() => setError(null), []);
+
+    // Refresh user profile
+    const refreshUserProfile = useCallback(async () => {
+        if (!user) return;
+        const profile = await getUserProfile(user.uid);
+        setUserProfile(profile);
+    }, [user]);
 
     // Set invite token to be processed after login/signup
     const setInviteToken = useCallback((token) => {
@@ -128,6 +151,13 @@ export function AuthProvider({ children }) {
         }
     }, []);
 
+    // Update user profile
+    const updateUserProfile = useCallback(async (data) => {
+        if (!user) return;
+        await updateUserProfileInFirestore(user.uid, data);
+        await refreshUserProfile();
+    }, [user, refreshUserProfile]);
+
     return (
         <AuthContext.Provider value={{
             user,
@@ -137,6 +167,9 @@ export function AuthProvider({ children }) {
             signup,
             login,
             logout,
+            signInWithGoogle,
+            updateUserProfile,
+            refreshUserProfile,
             clearError,
             setInviteToken,
             isAuthenticated: !!user,
@@ -228,6 +261,10 @@ function getErrorMessage(code) {
         case 'auth/wrong-password': return 'Incorrect password. Please try again.';
         case 'auth/invalid-credential': return 'Invalid email or password.';
         case 'auth/too-many-requests': return 'Too many attempts. Please try again later.';
+        case 'auth/popup-closed-by-user': return 'Sign-in was cancelled. Please try again.';
+        case 'auth/popup-blocked': return 'Sign-in popup was blocked. Please allow popups for this site.';
+        case 'auth/account-exists-with-different-credential': return 'An account already exists with this email using a different sign-in method.';
+        case 'auth/cancelled-popup-request': return 'Sign-in was cancelled. Please try again.';
         default: return 'Something went wrong. Please try again.';
     }
 }

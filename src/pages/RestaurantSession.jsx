@@ -2,22 +2,26 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
     ChevronLeft, Share2, Users, ShoppingCart, Plus, Minus,
-    Leaf, Utensils, Copy, Check, Trash2, Clock, ChefHat
+    Leaf, Utensils, Copy, Check, Trash2, Clock, ChefHat, UserPlus, X, Search
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useApp } from '../context/AppContext';
 import { formatINR } from '../utils/currency';
 import { getAvatarColor, getInitials } from '../utils/helpers';
 import {
     getOrderingSession, joinOrderingSession, subscribeToSession,
     subscribeToCartItems, subscribeToRestaurant, getRestaurant,
-    saveCartItem, updateCartItem, removeCartItem, getUsersByIds
+    saveCartItem, updateCartItem, removeCartItem, getUsersByIds,
+    updateOrderingSession
 } from '../data/firestore';
 import { createCartItem } from '../data/models';
+import ShareOptions from '../components/ShareOptions';
 
 export default function RestaurantSession() {
     const { sessionId } = useParams();
     const navigate = useNavigate();
     const { user, userProfile } = useAuth();
+    const { friends } = useApp();
 
     // State
     const [session, setSession] = useState(null);
@@ -29,6 +33,13 @@ export default function RestaurantSession() {
     const [activeTab, setActiveTab] = useState('menu'); // 'menu' | 'mycart' | 'groupcart'
     const [selectedCategory, setSelectedCategory] = useState('All');
     const [shareCopied, setShareCopied] = useState(false);
+    const [showShareOptions, setShowShareOptions] = useState(false);
+
+    // Add friends modal
+    const [showAddFriendsModal, setShowAddFriendsModal] = useState(false);
+    const [selectedFriendsToAdd, setSelectedFriendsToAdd] = useState([]);
+    const [addFriendSearch, setAddFriendSearch] = useState('');
+    const [addingFriends, setAddingFriends] = useState(false);
 
     const currentUser = {
         id: userProfile?.id || user?.uid,
@@ -216,7 +227,11 @@ export default function RestaurantSession() {
         return item ? item.quantity : 0;
     };
 
-    const shareSession = async () => {
+    const shareSession = () => {
+        setShowShareOptions(true);
+    };
+
+    const copySessionLink = async () => {
         const shareUrl = `${window.location.origin}/order/${sessionId}`;
         try {
             await navigator.clipboard.writeText(shareUrl);
@@ -224,6 +239,49 @@ export default function RestaurantSession() {
             setTimeout(() => setShareCopied(false), 2000);
         } catch (err) {
             console.error('Failed to copy:', err);
+        }
+    };
+
+    // Check if current user is the host
+    const isHost = session?.createdBy === currentUser.id;
+
+    // Get friends not already in the session
+    const availableFriends = useMemo(() => {
+        if (!friends || !session) return [];
+        const participantIds = new Set(session.participants || []);
+        return friends.filter(f => !participantIds.has(f.id));
+    }, [friends, session]);
+
+    const filteredAvailableFriends = useMemo(() => {
+        if (!addFriendSearch.trim()) return availableFriends;
+        return availableFriends.filter(f =>
+            f.name.toLowerCase().includes(addFriendSearch.toLowerCase())
+        );
+    }, [availableFriends, addFriendSearch]);
+
+    const toggleFriendToAdd = (friendId) => {
+        setSelectedFriendsToAdd(prev => {
+            const isSelected = prev.includes(friendId);
+            return isSelected
+                ? prev.filter(id => id !== friendId)
+                : [...prev, friendId];
+        });
+    };
+
+    const handleAddFriendsToSession = async () => {
+        if (selectedFriendsToAdd.length === 0) return;
+
+        setAddingFriends(true);
+        try {
+            const updatedParticipants = [...(session.participants || []), ...selectedFriendsToAdd];
+            await updateOrderingSession(sessionId, { participants: updatedParticipants });
+            setShowAddFriendsModal(false);
+            setSelectedFriendsToAdd([]);
+            setAddFriendSearch('');
+        } catch (err) {
+            console.error('Error adding friends:', err);
+        } finally {
+            setAddingFriends(false);
         }
     };
 
@@ -271,7 +329,7 @@ export default function RestaurantSession() {
                     </div>
                 </div>
                 <button className="btn btn-icon share-btn" onClick={shareSession}>
-                    {shareCopied ? <Check size={20} /> : <Share2 size={20} />}
+                    <Share2 size={20} />
                 </button>
             </div>
 
@@ -280,10 +338,14 @@ export default function RestaurantSession() {
                 <Users size={18} />
                 <div className="participant-avatars">
                     {session?.participants?.slice(0, 5).map((participantId, idx) => {
+                        // Look up profile from loaded profiles, friends list, or fallback
                         const profile = participantProfiles[participantId];
+                        const friendProfile = friends.find(f => f.id === participantId);
+                        const userName = profile?.name || friendProfile?.name;
+
                         const displayName = participantId === currentUser.id
                             ? 'You'
-                            : (profile?.name || participantId.slice(0, 2).toUpperCase());
+                            : (userName || participantId.slice(0, 2).toUpperCase());
                         return (
                             <div
                                 key={participantId}
@@ -292,7 +354,7 @@ export default function RestaurantSession() {
                                     backgroundColor: getAvatarColor(participantId),
                                     zIndex: 5 - idx,
                                 }}
-                                title={profile?.name || (participantId === currentUser.id ? 'You' : participantId)}
+                                title={userName || (participantId === currentUser.id ? 'You' : participantId)}
                             >
                                 {displayName.length > 3 ? getInitials(displayName) : displayName}
                             </div>
@@ -302,6 +364,23 @@ export default function RestaurantSession() {
                         <div className="participant-avatar more">
                             +{session.participants.length - 5}
                         </div>
+                    )}
+                    {/* Add Friend Button - Only for host */}
+                    {isHost && availableFriends.length > 0 && (
+                        <button
+                            className="participant-avatar add-friend-btn"
+                            onClick={() => setShowAddFriendsModal(true)}
+                            title="Add friends to session"
+                            style={{
+                                backgroundColor: 'var(--primary-bg)',
+                                border: '2px dashed var(--primary)',
+                                color: 'var(--primary)',
+                                cursor: 'pointer',
+                                zIndex: 0,
+                            }}
+                        >
+                            <UserPlus size={14} />
+                        </button>
                     )}
                 </div>
                 <span className="participant-count">
@@ -565,6 +644,145 @@ export default function RestaurantSession() {
                 <div className="share-toast">
                     <Check size={18} />
                     Link copied to clipboard!
+                </div>
+            )}
+
+            {/* Share Options Modal */}
+            {showShareOptions && (
+                <ShareOptions
+                    link={`${window.location.origin}/order/${sessionId}`}
+                    title="Join my group order on NammaSplit"
+                    message={`Join my group order at ${restaurant?.name || 'the restaurant'} on NammaSplit! Let's order together and split the bill easily.`}
+                    onClose={() => setShowShareOptions(false)}
+                />
+            )}
+
+            {/* Add Friends Modal */}
+            {showAddFriendsModal && (
+                <div className="modal-overlay" onClick={() => setShowAddFriendsModal(false)}>
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <Users size={24} className="modal-icon primary" />
+                            <h3 className="modal-title">Add Friends</h3>
+                            <button className="modal-close" onClick={() => setShowAddFriendsModal(false)}>
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <div className="modal-body">
+                            <p style={{ color: 'var(--text-secondary)', marginBottom: 16 }}>
+                                Select friends to add to this ordering session.
+                            </p>
+
+                            {/* Search */}
+                            <div className="search-bar" style={{ marginBottom: 16 }}>
+                                <Search size={18} className="search-icon" />
+                                <input
+                                    type="text"
+                                    placeholder="Search friends..."
+                                    value={addFriendSearch}
+                                    onChange={(e) => setAddFriendSearch(e.target.value)}
+                                    className="search-input"
+                                />
+                            </div>
+
+                            {/* Selected count */}
+                            {selectedFriendsToAdd.length > 0 && (
+                                <div style={{ marginBottom: 12 }}>
+                                    <span className="badge badge-positive">
+                                        {selectedFriendsToAdd.length} selected
+                                    </span>
+                                </div>
+                            )}
+
+                            {/* Friends list */}
+                            <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+                                {filteredAvailableFriends.length === 0 ? (
+                                    <div className="empty-state" style={{ padding: '32px 0' }}>
+                                        <p style={{ color: 'var(--text-secondary)' }}>
+                                            {addFriendSearch ? 'No friends match your search' : 'All friends are already in this session'}
+                                        </p>
+                                    </div>
+                                ) : (
+                                    filteredAvailableFriends.map(friend => {
+                                        const isSelected = selectedFriendsToAdd.includes(friend.id);
+                                        return (
+                                            <div
+                                                key={friend.id}
+                                                onClick={() => toggleFriendToAdd(friend.id)}
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: 12,
+                                                    padding: 12,
+                                                    borderRadius: 12,
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s',
+                                                    background: isSelected ? 'var(--primary-bg)' : 'transparent',
+                                                    border: `2px solid ${isSelected ? 'var(--primary)' : 'var(--border)'}`,
+                                                    marginBottom: 8,
+                                                }}
+                                            >
+                                                <div
+                                                    className="avatar"
+                                                    style={{
+                                                        backgroundColor: getAvatarColor(friend.id),
+                                                        width: 40,
+                                                        height: 40,
+                                                        borderRadius: '50%',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        color: 'white',
+                                                        fontWeight: 600,
+                                                        fontSize: '0.85rem',
+                                                    }}
+                                                >
+                                                    {getInitials(friend.name)}
+                                                </div>
+                                                <div style={{ flex: 1 }}>
+                                                    <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>{friend.name}</div>
+                                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{friend.email}</div>
+                                                </div>
+                                                <div
+                                                    style={{
+                                                        width: 24,
+                                                        height: 24,
+                                                        borderRadius: '50%',
+                                                        border: `2px solid ${isSelected ? 'var(--primary)' : 'var(--border)'}`,
+                                                        background: isSelected ? 'var(--primary)' : 'transparent',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                    }}
+                                                >
+                                                    {isSelected && <Check size={16} color="white" />}
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="modal-footer">
+                            <button
+                                className="btn btn-secondary"
+                                onClick={() => setShowAddFriendsModal(false)}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                className="btn btn-primary"
+                                onClick={handleAddFriendsToSession}
+                                disabled={selectedFriendsToAdd.length === 0 || addingFriends}
+                            >
+                                {addingFriends ? 'Adding...' : (
+                                    <><UserPlus size={16} /> Add {selectedFriendsToAdd.length > 0 && `(${selectedFriendsToAdd.length})`}</>
+                                )}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

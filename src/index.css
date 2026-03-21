@@ -2226,6 +2226,20 @@ img {
   font-weight: 600;
 }
 
+.participant-avatar.add-friend-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.participant-avatar.add-friend-btn:hover {
+  background: var(--primary) !important;
+  color: white !important;
+  border-style: solid !important;
+  transform: scale(1.1);
+}
+
 .participant-count {
   margin-left: auto;
 }
@@ -4000,4 +4014,181 @@ img {
 
 .camera-placeholder {
   width: 48px;
+}
+
+/* ===== GOOGLE SIGN-IN BUTTON ===== */
+.btn-google {
+  width: 100%;
+  padding: 12px 24px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-full);
+  font-weight: 600;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-google:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--border-light);
+}
+
+.btn-google:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-google svg {
+  color: #4285F4;
+}
+
+/* Auth divider */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  margin: var(--space-lg) 0;
+}
+
+.auth-divider-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.auth-divider-text {
+  color: var(--text-tertiary);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+/* ===== SHARE OPTIONS MODAL ===== */
+.share-modal {
+  max-width: 420px;
+}
+
+.share-modal .modal-body {
+  padding: var(--space-md) var(--space-lg) var(--space-lg);
+}
+
+.share-message {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  text-align: center;
+  margin-bottom: var(--space-lg);
+  line-height: 1.5;
+}
+
+.share-options-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-md);
+  margin-bottom: var(--space-xl);
+}
+
+.share-option-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+  background: transparent;
+}
+
+.share-option-btn:hover {
+  transform: translateY(-2px);
+}
+
+.share-icon-wrapper {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.share-option-btn span {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+/* WhatsApp */
+.share-option-btn.whatsapp .share-icon-wrapper {
+  background: #25D366;
+  color: white;
+}
+
+.share-option-btn.whatsapp:hover .share-icon-wrapper {
+  box-shadow: 0 4px 12px rgba(37, 211, 102, 0.4);
+}
+
+/* Messages/SMS */
+.share-option-btn.messages .share-icon-wrapper {
+  background: linear-gradient(135deg, #34C759, #30B350);
+  color: white;
+}
+
+.share-option-btn.messages:hover .share-icon-wrapper {
+  box-shadow: 0 4px 12px rgba(52, 199, 89, 0.4);
+}
+
+/* Email */
+.share-option-btn.email .share-icon-wrapper {
+  background: linear-gradient(135deg, #EA4335, #FBBC05);
+  color: white;
+}
+
+.share-option-btn.email:hover .share-icon-wrapper {
+  box-shadow: 0 4px 12px rgba(234, 67, 53, 0.4);
+}
+
+/* Native Share */
+.share-option-btn.native .share-icon-wrapper {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+
+.share-option-btn.native:hover .share-icon-wrapper {
+  background: var(--border-light);
+}
+
+/* Copy link section */
+.share-copy-section {
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--border-light);
+}
+
+.share-link-input {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.share-link-input .form-input {
+  flex: 1;
+  font-size: 0.85rem;
+  background: var(--bg-tertiary);
+}
+
+.share-link-input .btn {
+  padding: 10px 14px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 380px) {
+  .share-options-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-md);
+  }
 }

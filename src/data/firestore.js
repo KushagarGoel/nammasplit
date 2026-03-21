@@ -37,6 +37,10 @@ export async function getUserProfile(uid) {
     return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
+export async function updateUserProfile(uid, data) {
+    await updateDoc(doc(db, 'users', uid), data);
+}
+
 export async function getUsersByIds(uids) {
     if (!uids || uids.length === 0) return [];
     const users = [];

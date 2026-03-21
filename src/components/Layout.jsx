@@ -4,7 +4,7 @@ import { useApp } from '../context/AppContext';
 import { getInitials, getAvatarColor } from '../utils/helpers';
 import BottomNav from './BottomNav';
 
-export default function Layout() {
+export default function Layout({ children }) {
     const { currentUser } = useApp();
     const navigate = useNavigate();
 
@@ -25,7 +25,7 @@ export default function Layout() {
             </header>
 
             <main className="page-content">
-                <Outlet />
+                {children || <Outlet />}
             </main>
 
             <BottomNav />

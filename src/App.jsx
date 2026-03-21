@@ -36,7 +36,9 @@ function AppRoutes() {
       <Route path="/order/:sessionId" element={
         <ProtectedRoute>
           <AppProvider>
-            <RestaurantSession />
+            <Layout>
+              <RestaurantSession />
+            </Layout>
           </AppProvider>
         </ProtectedRoute>
       } />

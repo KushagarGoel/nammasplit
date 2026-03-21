@@ -38,6 +38,10 @@ export default function Restaurants() {
     const [editModal, setEditModal] = useState({ show: false, restaurant: null, editedItems: [] });
     const [editModalSearch, setEditModalSearch] = useState('');
 
+    // Friend selection for session
+    const [friendSelectionModal, setFriendSelectionModal] = useState({ show: false, restaurant: null, selectedFriends: [] });
+    const [friendSearch, setFriendSearch] = useState('');
+
     const userName = userProfile?.name || currentUser?.name || 'You';
 
     // Sort sessions: hosted by user first, then participating
@@ -107,10 +111,11 @@ export default function Restaurants() {
             setHostLimitModal({ show: true, existingSession: existingHosted });
             return;
         }
-        createSession(restaurant);
+        // Show friend selection modal instead of directly creating session
+        setFriendSelectionModal({ show: true, restaurant, selectedFriends: [] });
     };
 
-    const createSession = async (restaurant) => {
+    const createSession = async (restaurant, friendIdsToAdd = []) => {
         try {
             const session = createOrderingSession({
                 restaurantId: restaurant.id,
@@ -119,13 +124,37 @@ export default function Restaurants() {
                 hostName: userName,
             });
 
+            // Add selected friends to participants
+            if (friendIdsToAdd.length > 0) {
+                session.participants = [...session.participants, ...friendIdsToAdd];
+            }
+
             await saveOrderingSession(session);
-            setCreateSessionModal({ show: false, restaurant: null });
+            setFriendSelectionModal({ show: false, restaurant: null, selectedFriends: [] });
             navigate(`/order/${session.id}`);
         } catch (err) {
             console.error('Error creating session:', err);
         }
     };
+
+    const toggleFriendSelection = (friendId) => {
+        setFriendSelectionModal(prev => {
+            const isSelected = prev.selectedFriends.includes(friendId);
+            return {
+                ...prev,
+                selectedFriends: isSelected
+                    ? prev.selectedFriends.filter(id => id !== friendId)
+                    : [...prev.selectedFriends, friendId]
+            };
+        });
+    };
+
+    const filteredFriends = useMemo(() => {
+        if (!friendSearch.trim()) return friends;
+        return friends.filter(f =>
+            f.name.toLowerCase().includes(friendSearch.toLowerCase())
+        );
+    }, [friends, friendSearch]);
 
     const handleDeleteRestaurant = async () => {
         const { restaurant } = deleteModal;
@@ -856,6 +885,132 @@ export default function Restaurants() {
                                 onClick={handleSaveRestaurantEdit}
                             >
                                 <CheckCircle size={16} /> Save Changes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Friend Selection Modal */}
+            {friendSelectionModal.show && (
+                <div className="modal-overlay" onClick={() => setFriendSelectionModal({ show: false, restaurant: null, selectedFriends: [] })}>
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <Users size={24} className="modal-icon primary" />
+                            <h3>Add Friends to Session</h3>
+                        </div>
+
+                        <div className="modal-body">
+                            <p style={{ color: 'var(--text-secondary)', marginBottom: 16 }}>
+                                Select friends to add to the ordering session for <strong>{friendSelectionModal.restaurant?.name}</strong>. They&apos;ll be able to join and order immediately.
+                            </p>
+
+                            {/* Friend Search */}
+                            <div className="search-bar" style={{ marginBottom: 16 }}>
+                                <Search size={18} className="search-icon" />
+                                <input
+                                    type="text"
+                                    placeholder="Search friends..."
+                                    value={friendSearch}
+                                    onChange={(e) => setFriendSearch(e.target.value)}
+                                    className="search-input"
+                                />
+                            </div>
+
+                            {/* Selected Count */}
+                            {friendSelectionModal.selectedFriends.length > 0 && (
+                                <div style={{ marginBottom: 12 }}>
+                                    <span className="badge badge-positive">
+                                        {friendSelectionModal.selectedFriends.length} friend{friendSelectionModal.selectedFriends.length > 1 ? 's' : ''} selected
+                                    </span>
+                                </div>
+                            )}
+
+                            {/* Friends List */}
+                            <div className="friends-select-list" style={{ maxHeight: 300, overflowY: 'auto' }}>
+                                {filteredFriends.length === 0 ? (
+                                    <div className="empty-state" style={{ padding: '32px 0' }}>
+                                        <p style={{ color: 'var(--text-secondary)' }}>
+                                            {friendSearch ? 'No friends match your search' : 'No friends yet. Add friends first!'}
+                                        </p>
+                                    </div>
+                                ) : (
+                                    filteredFriends.map(friend => {
+                                        const isSelected = friendSelectionModal.selectedFriends.includes(friend.id);
+                                        return (
+                                            <div
+                                                key={friend.id}
+                                                className="friend-select-item"
+                                                onClick={() => toggleFriendSelection(friend.id)}
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: 12,
+                                                    padding: 12,
+                                                    borderRadius: 12,
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s',
+                                                    background: isSelected ? 'var(--primary-bg)' : 'transparent',
+                                                    border: `2px solid ${isSelected ? 'var(--primary)' : 'var(--border)'}`,
+                                                    marginBottom: 8,
+                                                }}
+                                            >
+                                                <div
+                                                    className="avatar"
+                                                    style={{
+                                                        background: `linear-gradient(135deg, var(--primary), var(--accent))`,
+                                                        width: 40,
+                                                        height: 40,
+                                                        borderRadius: '50%',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        color: 'white',
+                                                        fontWeight: 600,
+                                                        fontSize: '0.85rem',
+                                                    }}
+                                                >
+                                                    {friend.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                                                </div>
+                                                <div style={{ flex: 1 }}>
+                                                    <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>{friend.name}</div>
+                                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{friend.email}</div>
+                                                </div>
+                                                <div
+                                                    style={{
+                                                        width: 24,
+                                                        height: 24,
+                                                        borderRadius: '50%',
+                                                        border: `2px solid ${isSelected ? 'var(--primary)' : 'var(--border)'}`,
+                                                        background: isSelected ? 'var(--primary)' : 'transparent',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                    }}
+                                                >
+                                                    {isSelected && <CheckCircle size={16} color="white" />}
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="modal-actions">
+                            <button
+                                className="btn btn-secondary"
+                                onClick={() => setFriendSelectionModal({ show: false, restaurant: null, selectedFriends: [] })}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                className="btn btn-primary"
+                                onClick={() => createSession(friendSelectionModal.restaurant, friendSelectionModal.selectedFriends)}
+                                disabled={!friendSelectionModal.restaurant}
+                            >
+                                <ShoppingBag size={16} />
+                                Create Session {friendSelectionModal.selectedFriends.length > 0 && `(${friendSelectionModal.selectedFriends.length + 1} participants)`}
                             </button>
                         </div>
                     </div>

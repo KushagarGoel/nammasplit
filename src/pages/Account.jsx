@@ -1,18 +1,44 @@
-import { Moon, IndianRupee, LogOut, Trash2 } from 'lucide-react';
+import { Moon, IndianRupee, LogOut, Trash2, Wallet, Check, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { getInitials, getAvatarColor } from '../utils/helpers';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function Account() {
-    const { currentUser, friends, groups, expenses } = useApp();
-    const { logout } = useAuth();
+    const { currentUser, friends, groups, expenses, showToast } = useApp();
+    const { logout, user, updateUserProfile, userProfile } = useAuth();
     const [showConfirmReset, setShowConfirmReset] = useState(false);
     const [logouting, setLogouting] = useState(false);
+    const [upiId, setUpiId] = useState(userProfile?.upiId || '');
+    const [isEditingUpi, setIsEditingUpi] = useState(false);
+    const [savingUpi, setSavingUpi] = useState(false);
+
+    // Sync upiId with userProfile when it changes
+    useEffect(() => {
+        setUpiId(userProfile?.upiId || '');
+    }, [userProfile?.upiId]);
 
     const handleLogout = async () => {
         setLogouting(true);
         await logout();
+    };
+
+    const handleSaveUpi = async () => {
+        setSavingUpi(true);
+        try {
+            await updateUserProfile({ upiId: upiId.trim() || null });
+            setIsEditingUpi(false);
+            showToast('UPI ID saved successfully');
+        } catch (err) {
+            console.error('Failed to save UPI ID:', err);
+            showToast('Failed to save UPI ID');
+        }
+        setSavingUpi(false);
+    };
+
+    const handleCancelUpi = () => {
+        setUpiId(userProfile?.upiId || '');
+        setIsEditingUpi(false);
     };
 
     return (
@@ -74,6 +100,88 @@ export default function Account() {
                         <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
                             System
                         </span>
+                    </div>
+
+                    {/* UPI ID */}
+                    <div className="settings-item" style={{ borderBottom: 'none' }}>
+                        <div className="settings-item-left">
+                            <div className="settings-item-icon">
+                                <Wallet size={18} />
+                            </div>
+                            <span className="settings-item-label">UPI ID</span>
+                        </div>
+                        {isEditingUpi ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <input
+                                    type="text"
+                                    value={upiId}
+                                    onChange={(e) => setUpiId(e.target.value)}
+                                    placeholder="yourname@upi"
+                                    style={{
+                                        padding: '6px 10px',
+                                        border: '1.5px solid var(--primary)',
+                                        borderRadius: 'var(--radius-sm)',
+                                        fontSize: '0.9rem',
+                                        width: '150px',
+                                        outline: 'none',
+                                        background: 'var(--bg-tertiary)',
+                                        color: 'var(--text-primary)'
+                                    }}
+                                    autoFocus
+                                />
+                                <button
+                                    onClick={handleSaveUpi}
+                                    disabled={savingUpi}
+                                    style={{
+                                        padding: '6px',
+                                        borderRadius: 'var(--radius-sm)',
+                                        background: 'var(--positive-bg)',
+                                        color: 'var(--positive)',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center'
+                                    }}
+                                >
+                                    <Check size={16} />
+                                </button>
+                                <button
+                                    onClick={handleCancelUpi}
+                                    style={{
+                                        padding: '6px',
+                                        borderRadius: 'var(--radius-sm)',
+                                        background: 'var(--negative-bg)',
+                                        color: 'var(--negative)',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center'
+                                    }}
+                                >
+                                    <X size={16} />
+                                </button>
+                            </div>
+                        ) : (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <span style={{ color: userProfile?.upiId ? 'var(--text-primary)' : 'var(--text-tertiary)', fontSize: '0.9rem' }}>
+                                    {userProfile?.upiId || 'Not set'}
+                                </span>
+                                <button
+                                    className="btn btn-sm"
+                                    onClick={() => setIsEditingUpi(true)}
+                                    style={{
+                                        padding: '4px 12px',
+                                        fontSize: '0.8rem',
+                                        background: 'var(--bg-tertiary)',
+                                        color: 'var(--text-secondary)',
+                                        border: '1px solid var(--border)',
+                                        borderRadius: 'var(--radius-sm)'
+                                    }}
+                                >
+                                    {userProfile?.upiId ? 'Edit' : 'Add'}
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
