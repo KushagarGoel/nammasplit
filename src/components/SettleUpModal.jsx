@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { X, Check, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, Check, ExternalLink, ChevronDown, ChevronUp, Copy } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { formatINR } from '../utils/currency';
 import { getInitials, getAvatarColor } from '../utils/helpers';
@@ -15,10 +15,27 @@ export default function SettleUpModal({ onClose, preselectedFriendId = null, pre
 
     const [step, setStep] = useState(preselectedFriendId ? 2 : 1);
     const [selectedFriendId, setSelectedFriendId] = useState(preselectedFriendId);
-    const [selectedGroupId, setSelectedGroupId] = useState(preselectedGroupId);
     const [amount, setAmount] = useState('');
     const [method, setMethod] = useState('upi');
     const [showGroupBreakdown, setShowGroupBreakdown] = useState(false);
+    const [upiCopied, setUpiCopied] = useState(false);
+
+    const handleCopyUpi = async (upiId) => {
+        try {
+            await navigator.clipboard.writeText(upiId);
+            setUpiCopied(true);
+            setTimeout(() => setUpiCopied(false), 2000);
+        } catch (err) {
+            const textArea = document.createElement('textarea');
+            textArea.value = upiId;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            setUpiCopied(true);
+            setTimeout(() => setUpiCopied(false), 2000);
+        }
+    };
 
     // Get balance breakdown for the selected friend
     const balanceBreakdown = selectedFriendId ? getFriendBalanceBreakdown(selectedFriendId) : [];
@@ -36,18 +53,48 @@ export default function SettleUpModal({ onClose, preselectedFriendId = null, pre
         ? (relevantBreakdown.find(b => b.groupId === preselectedGroupId)?.balance || 0)
         : totalBalance;
 
-    const friendsWithBalances = friends
-        .map(f => ({ ...f, balance: getFriendBalance(f.id) }))
-        .filter(f => Math.abs(f.balance) > 0.5)
-        .sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance));
+    // Compute friends list with balances for step 1
+    const friendsWithBalances = useMemo(() => {
+        // When preselectedGroupId is set, show group members with their group-specific balances
+        if (preselectedGroupId) {
+            const group = groups.find(g => g.id === preselectedGroupId);
+            if (!group) return [];
 
-    const selectedFriend = selectedFriendId ? getUserById(selectedFriendId) : null;
+            return group.members
+                .filter(memberId => memberId !== currentUser.id)
+                .map(memberId => {
+                    const member = getUserById(memberId);
+                    // Get the group-specific balance for this member
+                    const memberBreakdown = getFriendBalanceBreakdown(memberId);
+                    const groupBalance = memberBreakdown.find(b => b.groupId === preselectedGroupId)?.balance || 0;
+                    return { ...member, balance: groupBalance };
+                })
+                .filter(f => Math.abs(f.balance) > 0.5)
+                .sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance));
+        }
+
+        // Default: show all friends with total balances
+        return friends
+            .map(f => ({ ...f, balance: getFriendBalance(f.id) }))
+            .filter(f => Math.abs(f.balance) > 0.5)
+            .sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance));
+    }, [friends, getFriendBalance, preselectedGroupId, groups, currentUser.id, getUserById, getFriendBalanceBreakdown]);
+
+    // Get selected friend - prefer friends array to ensure upiId is available
+    const selectedFriend = useMemo(() => {
+        if (!selectedFriendId) return null;
+        // First check friends array (has full friend data including upiId)
+        const fromFriends = friends.find(f => f.id === selectedFriendId);
+        if (fromFriends) return fromFriends;
+        // Fallback to getUserById
+        return getUserById(selectedFriendId);
+    }, [selectedFriendId, friends, getUserById]);
 
     // Pre-fill amount when friend is selected
     useEffect(() => {
         if (selectedFriendId && step === 2) {
             const bal = Math.abs(selectedBalance);
-            setAmount(bal > 0 ? bal.toFixed(0) : '');
+            setAmount(bal > 0 ? bal.toFixed(2) : '');
         }
     }, [selectedFriendId, step, selectedBalance]);
 
@@ -164,6 +211,35 @@ export default function SettleUpModal({ onClose, preselectedFriendId = null, pre
                                         : `You owe ${selectedFriend.name} ${formatINR(Math.abs(selectedBalance))}`
                                     }
                                 </p>
+                                {selectedFriend.upiId && (
+                                    <p style={{
+                                        color: 'var(--primary)',
+                                        fontSize: '0.8rem',
+                                        marginTop: '4px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '6px'
+                                    }}>
+                                        {selectedFriend.upiId}
+                                        <button
+                                            onClick={() => handleCopyUpi(selectedFriend.upiId)}
+                                            style={{
+                                                background: 'none',
+                                                border: 'none',
+                                                padding: '2px',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                color: 'var(--text-secondary)',
+                                                marginLeft: '2px'
+                                            }}
+                                            title="Copy UPI ID"
+                                        >
+                                            {upiCopied ? <span style={{ fontSize: '0.75rem' }}>✓</span> : <Copy size={12} />}
+                                        </button>
+                                    </p>
+                                )}
                             </div>
 
                             {/* Group Breakdown Toggle */}

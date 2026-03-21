@@ -16,6 +16,27 @@ export default function Friends() {
     const [generatingLink, setGeneratingLink] = useState(false);
     const [linkCopied, setLinkCopied] = useState(false);
     const [showShareOptions, setShowShareOptions] = useState(false);
+    const [copiedUpiId, setCopiedUpiId] = useState(null);
+
+    const handleCopyUpi = async (upiId, e) => {
+        e.stopPropagation();
+        try {
+            await navigator.clipboard.writeText(upiId);
+            setCopiedUpiId(upiId);
+            showToast('UPI ID copied!');
+            setTimeout(() => setCopiedUpiId(null), 2000);
+        } catch (err) {
+            const textArea = document.createElement('textarea');
+            textArea.value = upiId;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            setCopiedUpiId(upiId);
+            showToast('UPI ID copied!');
+            setTimeout(() => setCopiedUpiId(null), 2000);
+        }
+    };
 
     const generateInviteLink = async () => {
         setGeneratingLink(true);
@@ -79,11 +100,33 @@ export default function Friends() {
             <div className="list-item-content">
                 <div className="list-item-title">{friend.name}</div>
                 <div className="list-item-subtitle">
-                    {friend.balance > 0.5
-                        ? 'owes you'
-                        : friend.balance < -0.5
-                            ? 'you owe'
-                            : 'settled up ✓'}
+                    {friend.upiId ? (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            {friend.upiId}
+                            <button
+                                onClick={(e) => handleCopyUpi(friend.upiId, e)}
+                                style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    padding: '2px',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    color: 'var(--text-tertiary)',
+                                    marginLeft: '2px'
+                                }}
+                                title="Copy UPI ID"
+                            >
+                                {copiedUpiId === friend.upiId ? <span style={{ fontSize: '0.75rem' }}>✓</span> : <Copy size={12} />}
+                            </button>
+                        </span>
+                    ) : (
+                        friend.balance > 0.5
+                            ? 'owes you'
+                            : friend.balance < -0.5
+                                ? 'you owe'
+                                : 'settled up ✓'
+                    )}
                 </div>
             </div>
             <div className="list-item-right">

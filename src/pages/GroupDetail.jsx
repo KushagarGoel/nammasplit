@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, HandCoins, ReceiptText, UserPlus, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Plus, HandCoins, ReceiptText, UserPlus, Trash2, X, Edit2, Check } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { formatINR } from '../utils/currency';
 import { getInitials, getAvatarColor } from '../utils/helpers';
@@ -12,7 +12,7 @@ import SettleUpModal from '../components/SettleUpModal';
 export default function GroupDetail() {
     const { id } = useParams();
     const navigate = useNavigate();
-    const { getGroupById, getExpensesByGroup, getGroupBalanceDetails, getGroupSimplifiedDebts, getUserById, currentUser, friends, addMemberToGroup, deleteGroup, deleteExpense, settlements } = useApp();
+    const { getGroupById, getExpensesByGroup, getGroupBalanceDetails, getGroupSimplifiedDebts, getUserById, currentUser, friends, addMemberToGroup, deleteGroup, deleteExpense, settlements, editGroupName } = useApp();
 
     const [showAddExpense, setShowAddExpense] = useState(false);
     const [showSettle, setShowSettle] = useState(false);
@@ -21,6 +21,8 @@ export default function GroupDetail() {
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [activeTab, setActiveTab] = useState('expenses');
     const [editingExpense, setEditingExpense] = useState(null);
+    const [isEditingName, setIsEditingName] = useState(false);
+    const [editedName, setEditedName] = useState('');
 
     const group = getGroupById(id);
     if (!group) {
@@ -84,7 +86,53 @@ export default function GroupDetail() {
                     {group.name.includes('🏖️') ? '🏖️' : group.name.includes('🏠') ? '🏠' : group.name.includes('🍱') ? '🍱' : '👥'}
                 </div>
                 <div className="group-header-info">
-                    <h1 className="group-header-name">{group.name}</h1>
+                    {isEditingName ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+                            <input
+                                type="text"
+                                className="form-input"
+                                value={editedName}
+                                onChange={e => setEditedName(e.target.value)}
+                                autoFocus
+                                style={{ fontSize: '1.25rem', fontWeight: 700, minWidth: '200px' }}
+                            />
+                            <button
+                                className="btn btn-primary btn-sm"
+                                onClick={async () => {
+                                    if (editedName.trim() && editedName.trim() !== group.name) {
+                                        await editGroupName(group.id, editedName.trim());
+                                    }
+                                    setIsEditingName(false);
+                                }}
+                            >
+                                <Check size={16} />
+                            </button>
+                            <button
+                                className="btn btn-secondary btn-sm"
+                                onClick={() => {
+                                    setIsEditingName(false);
+                                    setEditedName(group.name);
+                                }}
+                            >
+                                <X size={16} />
+                            </button>
+                        </div>
+                    ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+                            <h1 className="group-header-name">{group.name}</h1>
+                            <button
+                                className="btn btn-sm"
+                                onClick={() => {
+                                    setEditedName(group.name);
+                                    setIsEditingName(true);
+                                }}
+                                style={{ padding: '4px', background: 'transparent', border: 'none', color: 'var(--text-tertiary)' }}
+                                title="Edit group name"
+                            >
+                                <Edit2 size={16} />
+                            </button>
+                        </div>
+                    )}
                     <div className="group-header-members">
                         {group.members.map(id => getUserById(id).name.split(' ')[0]).join(', ')}
                     </div>
