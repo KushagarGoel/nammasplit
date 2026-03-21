@@ -30,6 +30,7 @@ export function createExpense({
     category = 'other',
     notes = '',
     date = null,
+    involvedUsers = [],
 }) {
     return {
         id: generateId(),
@@ -43,6 +44,7 @@ export function createExpense({
         notes,
         date: date || new Date().toISOString(),
         createdAt: new Date().toISOString(),
+        involvedUsers,
     };
 }
 

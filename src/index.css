@@ -602,7 +602,8 @@ img {
   margin-bottom: var(--space-xs);
 }
 
-.form-input {
+.form-input,
+.form-select {
   width: 100%;
   padding: 12px 16px;
   border: 1.5px solid var(--border);
@@ -614,7 +615,17 @@ img {
   outline: none;
 }
 
-.form-input:focus {
+.form-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%235F5F5F' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 40px;
+  cursor: pointer;
+}
+
+.form-input:focus,
+.form-select:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px var(--primary-bg);
 }
@@ -2080,6 +2091,12 @@ img {
   background: var(--bg-primary);
   display: flex;
   flex-direction: column;
+  padding-left: 0;
+  padding-right: 0;
+  padding-top: 0;
+  max-width: var(--max-width);
+  margin: 0 auto;
+  width: 100%;
 }
 
 .session-loading,
@@ -2648,8 +2665,28 @@ img {
 .breakdown-row {
   display: flex;
   align-items: center;
-  gap: var(--space-xs);
+  gap: var(--space-sm);
   font-size: 0.8rem;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+.breakdown-row.current-user {
+  border-color: var(--primary);
+  background: var(--primary-bg);
+}
+
+.breakdown-user {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.breakdown-username {
+  color: var(--text-secondary);
+  font-weight: 500;
 }
 
 .breakdown-avatar {
@@ -2736,7 +2773,7 @@ img {
 
 /* ===== RESTAURANTS PAGE ===== */
 .restaurants-page {
-  padding-bottom: var(--space-xl);
+  padding-bottom: calc(var(--bottom-nav-height) + var(--space-lg));
   width: 100%;
   max-width: 100%;
 }
@@ -3369,10 +3406,16 @@ img {
 }
 
 /* Expense Modal */
-.expense-modal-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-lg);
+.modal-body .expense-summary,
+.modal-body .cart-summary,
+.modal-body .participants-list {
+  margin-bottom: var(--space-lg);
+}
+
+.modal-body .expense-summary:last-child,
+.modal-body .cart-summary:last-child,
+.modal-body .participants-list:last-child {
+  margin-bottom: 0;
 }
 
 .expense-summary {

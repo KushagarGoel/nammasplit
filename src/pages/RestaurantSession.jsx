@@ -230,7 +230,7 @@ export default function RestaurantSession() {
     // Loading state
     if (loading) {
         return (
-            <div className="restaurant-session">
+            <div className="page-content restaurant-session">
                 <div className="session-loading">
                     <div className="spinner"></div>
                     <p>Loading session...</p>
@@ -242,7 +242,7 @@ export default function RestaurantSession() {
     // Error state
     if (error) {
         return (
-            <div className="restaurant-session">
+            <div className="page-content restaurant-session">
                 <div className="session-error">
                     <p>{error}</p>
                     <button className="btn btn-primary" onClick={() => navigate(-1)}>
@@ -254,7 +254,7 @@ export default function RestaurantSession() {
     }
 
     return (
-        <div className="restaurant-session">
+        <div className="page-content restaurant-session">
             {/* Header */}
             <div className="session-header">
                 <button className="back-btn" onClick={() => navigate(-1)}>
@@ -521,17 +521,24 @@ export default function RestaurantSession() {
                                             </div>
                                             <div className="groupcart-breakdown">
                                                 {item.userBreakdown.map((breakdown, idx) => (
-                                                    <div key={idx} className="breakdown-row">
-                                                        <div
-                                                            className="breakdown-avatar"
-                                                            style={{ backgroundColor: getAvatarColor(breakdown.userId) }}
-                                                            title={breakdown.userName || (breakdown.userId === currentUser.id ? 'You' : breakdown.userId.slice(0, 2).toUpperCase())}
-                                                        >
-                                                            {breakdown.userId === currentUser.id
-                                                                ? 'You'
-                                                                : (breakdown.userName
-                                                                    ? getInitials(breakdown.userName)
-                                                                    : breakdown.userId.slice(0, 2).toUpperCase())}
+                                                    <div
+                                                        key={idx}
+                                                        className={`breakdown-row ${breakdown.userId === currentUser.id ? 'current-user' : ''}`}
+                                                    >
+                                                        <div className="breakdown-user">
+                                                            <div
+                                                                className="breakdown-avatar"
+                                                                style={{ backgroundColor: getAvatarColor(breakdown.userId) }}
+                                                            >
+                                                                {breakdown.userId === currentUser.id
+                                                                    ? 'You'
+                                                                    : (breakdown.userName
+                                                                        ? getInitials(breakdown.userName)
+                                                                        : breakdown.userId.slice(0, 2).toUpperCase())}
+                                                            </div>
+                                                            <span className="breakdown-username">
+                                                                {breakdown.userId === currentUser.id ? 'You' : (breakdown.userName || breakdown.userId.slice(0, 8))}
+                                                            </span>
                                                         </div>
                                                         <span className="breakdown-qty">{breakdown.quantity}</span>
                                                     </div>

@@ -10,14 +10,14 @@ import { useAuth } from '../context/AuthContext';
 import { formatINR } from '../utils/currency';
 import {
     getUserRestaurants, getActiveSessionsForUser, getCartItemsForSession, getUsersByIds,
-    saveOrderingSession, removeRestaurant, updateRestaurant, updateOrderingSession, saveExpense
+    saveOrderingSession, removeRestaurant, updateRestaurant, updateOrderingSession
 } from '../data/firestore';
 import { createOrderingSession, createExpense } from '../data/models';
 import MenuUploader from '../components/MenuUploader';
 
 export default function Restaurants() {
     const navigate = useNavigate();
-    const { currentUser, friends, groups } = useApp();
+    const { currentUser, friends, groups, addExpense } = useApp();
     const { userProfile } = useAuth();
 
     const [restaurants, setRestaurants] = useState([]);
@@ -190,7 +190,9 @@ export default function Restaurants() {
         const { session, totalAmount, selectedGroup, participants } = expenseModal;
 
         try {
-            const involvedUserIds = participants.map(p => p.id);
+            // Get unique participant IDs and ensure current user (payer) is included
+            const participantIds = participants.map(p => p.id);
+            const involvedUserIds = [...new Set([currentUser.id, ...participantIds])];
 
             const expense = createExpense({
                 description: `${session.restaurantName} - Group Order`,
@@ -207,7 +209,7 @@ export default function Restaurants() {
                 involvedUsers: involvedUserIds,
             });
 
-            await saveExpense(expense);
+            await addExpense(expense);
             setExpenseModal({ show: false, session: null, cartItems: [], participants: [], selectedGroup: null, totalAmount: 0 });
         } catch (err) {
             console.error('Error saving expense:', err);
@@ -242,6 +244,7 @@ export default function Restaurants() {
                 }));
 
             await updateRestaurant(restaurant.id, {
+                name: restaurant.name,
                 menuItems: validItems,
                 updatedAt: new Date().toISOString()
             });
@@ -658,13 +661,13 @@ export default function Restaurants() {
             {/* Expense Modal */}
             {expenseModal.show && (
                 <div className="modal-overlay" onClick={() => setExpenseModal({ show: false, session: null, cartItems: [], participants: [], selectedGroup: null })}>
-                    <div className="modal-content modal-lg" onClick={(e) => e.stopPropagation()}>
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <Receipt size={24} className="modal-icon primary" />
                             <h3>Add as Expense</h3>
                         </div>
 
-                        <div className="expense-modal-body">
+                        <div className="modal-body">
                             <div className="expense-summary">
                                 <h4>{expenseModal.session?.restaurantName}</h4>
                                 <p className="expense-total">
@@ -757,13 +760,26 @@ export default function Restaurants() {
             {/* Edit Restaurant Modal */}
             {editModal.show && (
                 <div className="modal-overlay" onClick={() => setEditModal({ show: false, restaurant: null, editedItems: [] })}>
-                    <div className="modal-content modal-xl" onClick={(e) => e.stopPropagation()}>
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <Edit3 size={24} className="modal-icon primary" />
-                            <h3>Edit Menu: {editModal.restaurant?.name}</h3>
+                            <h3>Edit Restaurant</h3>
                         </div>
 
                         <div className="edit-menu-body">
+                            <div className="form-group">
+                                <label>Restaurant Name</label>
+                                <input
+                                    type="text"
+                                    value={editModal.restaurant?.name || ''}
+                                    onChange={(e) => setEditModal(prev => ({
+                                        ...prev,
+                                        restaurant: { ...prev.restaurant, name: e.target.value }
+                                    }))}
+                                    placeholder="Restaurant name"
+                                    className="form-input"
+                                />
+                            </div>
                             <div className="edit-modal-search">
                                 <Search size={18} className="search-icon" />
                                 <input
