@@ -163,6 +163,61 @@ export function AppProvider({ children }) {
         return simplifyDebts(groupBalances, group.members);
     }, [data.groups, data.expenses, data.settlements]);
 
+    // Get balance breakdown by group for a specific friend
+    const getFriendBalanceBreakdown = useCallback((friendId) => {
+        const breakdown = [];
+
+        // Check direct expenses (no group)
+        const directExpenses = data.expenses.filter(e => {
+            if (e.groupId) return false;
+            const involvesCurrent = e.paidBy === currentUser.id || e.splits.some(s => s.userId === currentUser.id);
+            const involvesFriend = e.paidBy === friendId || e.splits.some(s => s.userId === friendId);
+            return involvesCurrent && involvesFriend;
+        });
+
+        const directSettlements = data.settlements.filter(s => {
+            if (s.groupId) return false;
+            return (s.fromUserId === currentUser.id && s.toUserId === friendId) ||
+                   (s.fromUserId === friendId && s.toUserId === currentUser.id);
+        });
+
+        if (directExpenses.length > 0 || directSettlements.length > 0) {
+            const directBalances = computeBalances(directExpenses, directSettlements);
+            const directNet = getNetBalance(directBalances, currentUser.id, friendId);
+            if (Math.abs(directNet) > 0.5) {
+                breakdown.push({ groupId: null, groupName: 'Direct', balance: directNet });
+            }
+        }
+
+        // Check each group
+        data.groups.forEach(group => {
+            if (!group.members.includes(currentUser.id) || !group.members.includes(friendId)) return;
+
+            const groupExpenses = data.expenses.filter(e => e.groupId === group.id);
+            const groupSettlements = data.settlements.filter(s => s.groupId === group.id);
+            const groupBalances = computeBalances(groupExpenses, groupSettlements);
+            const groupNet = getNetBalance(groupBalances, currentUser.id, friendId);
+
+            if (Math.abs(groupNet) > 0.5) {
+                breakdown.push({ groupId: group.id, groupName: group.name, balance: groupNet });
+            }
+        });
+
+        return breakdown.sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance));
+    }, [data.groups, data.expenses, data.settlements, currentUser.id]);
+
+    // Get settlements for a specific friend (optionally filtered by group)
+    const getSettlementsWithFriend = useCallback((friendId, groupId = null) => {
+        return data.settlements
+            .filter(s => {
+                const involvesBoth = (s.fromUserId === currentUser.id && s.toUserId === friendId) ||
+                                    (s.fromUserId === friendId && s.toUserId === currentUser.id);
+                if (groupId === null) return involvesBoth;
+                return involvesBoth && s.groupId === groupId;
+            })
+            .sort((a, b) => new Date(b.date) - new Date(a.date));
+    }, [data.settlements, currentUser.id]);
+
     // ===== ACTIONS =====
     const addExpense = useCallback(async (expenseData) => {
         let finalGroupId = expenseData.groupId;
@@ -302,27 +357,93 @@ export function AppProvider({ children }) {
     }, [data.expenses, currentUser.id, getUserById, showToast]);
 
     const settleUp = useCallback(async (settlementData) => {
-        const settlement = createSettlement(settlementData);
-        const fromUser = getUserById(settlement.fromUserId);
-        const toUser = getUserById(settlement.toUserId);
+        const { fromUserId, toUserId, amount, method, groupId: requestedGroupId } = settlementData;
+        const fromUser = getUserById(fromUserId);
+        const toUser = getUserById(toUserId);
         const methodLabels = { upi: 'UPI', gpay: 'GPay', phonepe: 'PhonePe', cash: 'Cash', bank: 'Bank Transfer' };
 
-        const activity = createActivity({
+        let settlementsToCreate = [];
+
+        if (requestedGroupId) {
+            // Group-specific settlement: just create one settlement
+            settlementsToCreate.push(createSettlement({
+                fromUserId,
+                toUserId,
+                amount,
+                method,
+                groupId: requestedGroupId,
+            }));
+        } else {
+            // Friend-level settlement: distribute across groups with balances
+            const balanceBreakdown = getFriendBalanceBreakdown(fromUserId === currentUser.id ? toUserId : fromUserId);
+            let remainingAmount = amount;
+
+            // Sort by absolute balance (largest first) - settle groups with larger balances first
+            const sortedBreakdown = balanceBreakdown
+                .filter(b => Math.abs(b.balance) > 0.5)
+                .sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance));
+
+            for (const groupBalance of sortedBreakdown) {
+                if (remainingAmount <= 0) break;
+
+                // Only apply settlement if the balance direction matches
+                // (i.e., if we're paying someone who owes us in this group, skip)
+                // If balance > 0: friend owes currentUser (friend should pay currentUser)
+                // If balance < 0: currentUser owes friend (currentUser should pay friend)
+                const balanceDirectionMatches =
+                    (fromUserId === currentUser.id && groupBalance.balance < 0) ||
+                    (toUserId === currentUser.id && groupBalance.balance > 0);
+
+                if (!balanceDirectionMatches) continue;
+
+                const groupBalanceAmount = Math.abs(groupBalance.balance);
+                const settlementAmount = Math.min(remainingAmount, groupBalanceAmount);
+
+                settlementsToCreate.push(createSettlement({
+                    fromUserId,
+                    toUserId,
+                    amount: settlementAmount,
+                    method,
+                    groupId: groupBalance.groupId, // null for direct expenses
+                }));
+
+                remainingAmount -= settlementAmount;
+            }
+
+            // If there's still remaining amount, create a settlement with no groupId
+            // This handles overpayment scenarios
+            if (remainingAmount > 0.01) {
+                settlementsToCreate.push(createSettlement({
+                    fromUserId,
+                    toUserId,
+                    amount: remainingAmount,
+                    method,
+                    groupId: null,
+                }));
+            }
+        }
+
+        // Create activities for each settlement
+        const activities = settlementsToCreate.map(s => createActivity({
             type: 'settlement',
-            description: `${fromUser.name} paid ${toUser.name} ${formatINR(settlement.amount)} (${methodLabels[settlement.method] || settlement.method})`,
-            userId: settlement.fromUserId,
-            groupId: settlement.groupId,
-            amount: settlement.amount,
-            involvedUsers: [settlement.fromUserId, settlement.toUserId],
-        });
+            description: `${fromUser.name} paid ${toUser.name} ${formatINR(s.amount)} (${methodLabels[method] || method})`,
+            userId: fromUserId,
+            groupId: s.groupId,
+            amount: s.amount,
+            involvedUsers: [fromUserId, toUserId],
+        }));
 
-        await Promise.all([
-            saveSettlement(settlement),
-            saveActivity(activity),
-        ]);
+        // Save all settlements and activities
+        const savePromises = [
+            ...settlementsToCreate.map(s => saveSettlement(s)),
+            ...activities.map(a => saveActivity(a)),
+        ];
 
-        showToast(`Settled ${formatINR(settlement.amount)} with ${fromUser.id === currentUser.id ? toUser.name : fromUser.name}`);
-    }, [getUserById, currentUser.id, showToast]);
+        await Promise.all(savePromises);
+
+        const totalSettled = settlementsToCreate.reduce((sum, s) => sum + s.amount, 0);
+        showToast(`Settled ${formatINR(totalSettled)} with ${fromUser.id === currentUser.id ? toUser.name : fromUser.name}`);
+    }, [getUserById, currentUser, showToast, getFriendBalanceBreakdown]);
 
     const addGroup = useCallback(async (name, memberIds) => {
         const allMembers = [currentUser.id, ...memberIds];
@@ -534,6 +655,8 @@ export function AppProvider({ children }) {
         getFriendBalance,
         getGroupBalanceDetails,
         getGroupSimplifiedDebts,
+        getFriendBalanceBreakdown,
+        getSettlementsWithFriend,
 
         // Actions
         addExpense,

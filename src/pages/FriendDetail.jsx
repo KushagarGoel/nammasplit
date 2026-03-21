@@ -5,13 +5,14 @@ import { useApp } from '../context/AppContext';
 import { formatINR } from '../utils/currency';
 import { getInitials, getAvatarColor } from '../utils/helpers';
 import ExpenseCard from '../components/ExpenseCard';
+import SettlementCard from '../components/SettlementCard';
 import AddExpenseModal from '../components/AddExpenseModal';
 import SettleUpModal from '../components/SettleUpModal';
 
 export default function FriendDetail() {
     const { id } = useParams();
     const navigate = useNavigate();
-    const { getUserById, getExpensesBetweenFriends, getFriendBalance, expenses, currentUser, deleteExpense } = useApp();
+    const { getUserById, getExpensesBetweenFriends, getFriendBalance, getSettlementsWithFriend, expenses, currentUser, deleteExpense } = useApp();
 
     const [showAddExpense, setShowAddExpense] = useState(false);
     const [showSettle, setShowSettle] = useState(false);
@@ -20,6 +21,7 @@ export default function FriendDetail() {
     const friend = getUserById(id);
     const balance = getFriendBalance(id);
     const directExpenses = getExpensesBetweenFriends(id);
+    const settlements = getSettlementsWithFriend(id);
 
     // Also get group expenses between the two users (from named groups)
     const groupExpenses = expenses
@@ -32,10 +34,12 @@ export default function FriendDetail() {
         })
         .sort((a, b) => new Date(b.date) - new Date(a.date));
 
-    // Combine and deduplicate by expense ID
-    const expenseMap = new Map();
-    [...directExpenses, ...groupExpenses].forEach(e => expenseMap.set(e.id, e));
-    const allExpenses = Array.from(expenseMap.values()).sort((a, b) => new Date(b.date) - new Date(a.date));
+    // Combine expenses and settlements
+    const allTransactions = [
+        ...directExpenses.map(e => ({ ...e, type: 'expense' })),
+        ...groupExpenses.map(e => ({ ...e, type: 'expense' })),
+        ...settlements.map(s => ({ ...s, type: 'settlement' }))
+    ].sort((a, b) => new Date(b.date || b.sortDate) - new Date(a.date || a.sortDate));
 
     return (
         <div>
@@ -105,30 +109,37 @@ export default function FriendDetail() {
                 )}
             </div>
 
-            {/* Expenses */}
+            {/* Expenses & Settlements */}
             <div className="section">
                 <div className="section-header">
-                    <h3 className="section-title">Expense History</h3>
+                    <h3 className="section-title">History</h3>
                 </div>
                 <div className="card">
-                    {allExpenses.length === 0 ? (
+                    {allTransactions.length === 0 ? (
                         <div className="empty-state">
                             <div className="empty-state-icon">
                                 <ReceiptText size={36} />
                             </div>
-                            <h3 className="empty-state-title">No expenses yet</h3>
-                            <p className="empty-state-desc">Add an expense with {friend.name.split(' ')[0]}.</p>
+                            <h3 className="empty-state-title">No activity yet</h3>
+                            <p className="empty-state-desc">Add an expense or settlement with {friend.name.split(' ')[0]}.</p>
                         </div>
                     ) : (
-                        allExpenses.map(expense => (
-                            <ExpenseCard
-                                key={expense.id}
-                                expense={expense}
-                                onClick={() => {
-                                    setEditingExpense(expense);
-                                    setShowAddExpense(true);
-                                }}
-                            />
+                        allTransactions.map(transaction => (
+                            transaction.type === 'expense' ? (
+                                <ExpenseCard
+                                    key={transaction.id}
+                                    expense={transaction}
+                                    onClick={() => {
+                                        setEditingExpense(transaction);
+                                        setShowAddExpense(true);
+                                    }}
+                                />
+                            ) : (
+                                <SettlementCard
+                                    key={transaction.id}
+                                    settlement={transaction}
+                                />
+                            )
                         ))
                     )}
                 </div>

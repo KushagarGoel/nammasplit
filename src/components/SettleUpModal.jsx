@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { X, Check, ExternalLink } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { X, Check, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { formatINR } from '../utils/currency';
 import { getInitials, getAvatarColor } from '../utils/helpers';
@@ -11,12 +11,30 @@ const PAYMENT_METHODS = [
 ];
 
 export default function SettleUpModal({ onClose, preselectedFriendId = null, preselectedGroupId = null }) {
-    const { currentUser, friends, settleUp, getFriendBalance, getUserById } = useApp();
+    const { currentUser, friends, groups, settleUp, getFriendBalance, getFriendBalanceBreakdown, getGroupBalanceDetails, getUserById } = useApp();
 
     const [step, setStep] = useState(preselectedFriendId ? 2 : 1);
     const [selectedFriendId, setSelectedFriendId] = useState(preselectedFriendId);
+    const [selectedGroupId, setSelectedGroupId] = useState(preselectedGroupId);
     const [amount, setAmount] = useState('');
     const [method, setMethod] = useState('upi');
+    const [showGroupBreakdown, setShowGroupBreakdown] = useState(false);
+
+    // Get balance breakdown for the selected friend
+    const balanceBreakdown = selectedFriendId ? getFriendBalanceBreakdown(selectedFriendId) : [];
+
+    // If preselectedGroupId, filter breakdown to that group only
+    const relevantBreakdown = preselectedGroupId
+        ? balanceBreakdown.filter(b => b.groupId === preselectedGroupId)
+        : balanceBreakdown;
+
+    // Calculate total balance from relevant groups
+    const totalBalance = relevantBreakdown.reduce((sum, b) => sum + b.balance, 0);
+
+    // For group-specific settlement, show that group's balance
+    const selectedBalance = preselectedGroupId
+        ? (relevantBreakdown.find(b => b.groupId === preselectedGroupId)?.balance || 0)
+        : totalBalance;
 
     const friendsWithBalances = friends
         .map(f => ({ ...f, balance: getFriendBalance(f.id) }))
@@ -24,12 +42,21 @@ export default function SettleUpModal({ onClose, preselectedFriendId = null, pre
         .sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance));
 
     const selectedFriend = selectedFriendId ? getUserById(selectedFriendId) : null;
-    const selectedBalance = selectedFriendId ? getFriendBalance(selectedFriendId) : 0;
+
+    // Pre-fill amount when friend is selected
+    useEffect(() => {
+        if (selectedFriendId && step === 2) {
+            const bal = Math.abs(selectedBalance);
+            setAmount(bal > 0 ? bal.toFixed(0) : '');
+        }
+    }, [selectedFriendId, step, selectedBalance]);
 
     const upiUrl = useMemo(() => {
         if (!selectedFriend) return null;
         const payAmount = parseFloat(amount) || 0;
-        const note = 'Payment via Nammasplit';
+        const note = preselectedGroupId
+            ? `Payment for ${groups.find(g => g.id === preselectedGroupId)?.name || 'group'}`
+            : 'Payment via Nammasplit';
 
         // If recipient has UPI ID, include it; otherwise open UPI app without payee
         if (selectedFriend.upiId) {
@@ -38,54 +65,14 @@ export default function SettleUpModal({ onClose, preselectedFriendId = null, pre
             // Open UPI app with just amount and note, user selects payee manually
             return `upi://pay?am=${payAmount}&cu=INR&tn=${encodeURIComponent(note)}`;
         }
-    }, [selectedFriend, amount]);
+    }, [selectedFriend, amount, preselectedGroupId, groups]);
 
     const handleSelectFriend = (friendId) => {
         setSelectedFriendId(friendId);
-        const friend = friends.find(f => f.id === friendId);
-        const bal = getFriendBalance(friendId);
-        setAmount(Math.abs(bal).toFixed(0));
         setStep(2);
     };
 
     const openUpiApp = async () => {
-        const upiApps = [
-        { id: 'gpay',     label: 'Google Pay',   method: 'https://tez.google.com/pay' },
-        { id: 'phonepe',  label: 'PhonePe',      method: 'https://mercury.phonepe.com/transact/pay' },
-        { id: 'paytm',    label: 'Paytm',        method: 'https://paytm.com/payment' },
-        { id: 'bhim',     label: 'BHIM',         method: 'https://upi.npci.org.in/pay' },
-        { id: 'amazonpay',label: 'Amazon Pay',   method: 'https://amazonpay.amazon.in/pay' },
-        { id: 'cred',     label: 'CRED',         method: 'https://cred.club/pay' },
-        { id: 'mobikwik', label: 'MobiKwik',     method: 'https://mobikwik.com/pay' },
-        ];
-
-        async function getAvailableUpiApps() {
-        const available = [];
-
-        await Promise.all(
-            upiApps.map(async (app) => {
-            try {
-                const request = new PaymentRequest(
-                [{ supportedMethods: app.method }],
-                { total: { label: 'Test', amount: { currency: 'INR', value: '1.00' } } }
-                );
-
-                const canPay = await request.canMakePayment();
-                if (canPay) available.push(app);
-
-            } catch (e) {
-                // App not available, skip
-            }
-            })
-        );
-
-        return available;
-        }
-
-        // Usage
-        const apps = await getAvailableUpiApps();
-        console.log('Available UPI apps:', apps);
-        
         if (upiUrl) {
             window.location.href = upiUrl;
         }
@@ -94,7 +81,13 @@ export default function SettleUpModal({ onClose, preselectedFriendId = null, pre
     const handleSettle = () => {
         if (!selectedFriendId || !amount || parseFloat(amount) <= 0) return;
 
-        const bal = getFriendBalance(selectedFriendId);
+        // Determine who pays whom based on the balance
+        // If selectedBalance > 0, friend owes currentUser (friend pays currentUser)
+        // If selectedBalance < 0, currentUser owes friend (currentUser pays friend)
+        const bal = preselectedGroupId
+            ? (relevantBreakdown.find(b => b.groupId === preselectedGroupId)?.balance || 0)
+            : getFriendBalance(selectedFriendId);
+
         const fromId = bal > 0 ? selectedFriendId : currentUser.id;
         const toId = bal > 0 ? currentUser.id : selectedFriendId;
 
@@ -103,7 +96,7 @@ export default function SettleUpModal({ onClose, preselectedFriendId = null, pre
             toUserId: toId,
             amount: parseFloat(amount),
             method,
-            groupId: preselectedGroupId,
+            groupId: preselectedGroupId || null,
         });
 
         onClose();
@@ -173,8 +166,76 @@ export default function SettleUpModal({ onClose, preselectedFriendId = null, pre
                                 </p>
                             </div>
 
+                            {/* Group Breakdown Toggle */}
+                            {!preselectedGroupId && balanceBreakdown.length > 1 && (
+                                <div style={{ marginBottom: 'var(--space-md)' }}>
+                                    <button
+                                        className="btn btn-secondary"
+                                        onClick={() => setShowGroupBreakdown(!showGroupBreakdown)}
+                                        style={{
+                                            width: '100%',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            fontSize: '0.85rem'
+                                        }}
+                                    >
+                                        <span>Balance by Group</span>
+                                        {showGroupBreakdown ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                    </button>
+                                    {showGroupBreakdown && (
+                                        <div style={{
+                                            marginTop: 'var(--space-sm)',
+                                            padding: 'var(--space-md)',
+                                            background: 'var(--bg-secondary)',
+                                            borderRadius: 'var(--radius-md)',
+                                        }}>
+                                            {balanceBreakdown.map(item => (
+                                                <div
+                                                    key={item.groupId || 'direct'}
+                                                    style={{
+                                                        display: 'flex',
+                                                        justifyContent: 'space-between',
+                                                        alignItems: 'center',
+                                                        padding: 'var(--space-xs) 0',
+                                                        borderBottom: '1px solid var(--divider)',
+                                                    }}
+                                                >
+                                                    <span style={{ fontSize: '0.85rem' }}>{item.groupName}</span>
+                                                    <span style={{
+                                                        fontSize: '0.85rem',
+                                                        fontWeight: 600,
+                                                        color: item.balance > 0 ? 'var(--positive)' : 'var(--negative)'
+                                                    }}>
+                                                        {item.balance > 0 ? '+' : ''}{formatINR(item.balance)}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                            <div style={{
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'center',
+                                                paddingTop: 'var(--space-sm)',
+                                                marginTop: 'var(--space-xs)',
+                                                borderTop: '2px solid var(--divider)',
+                                            }}>
+                                                <span style={{ fontWeight: 600 }}>Total</span>
+                                                <span style={{
+                                                    fontWeight: 700,
+                                                    color: totalBalance > 0 ? 'var(--positive)' : 'var(--negative)'
+                                                }}>
+                                                    {totalBalance > 0 ? '+' : ''}{formatINR(totalBalance)}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             <div className="form-group">
-                                <label className="form-label">Amount</label>
+                                <label className="form-label">
+                                    Amount {preselectedGroupId && '(for this group only)'}
+                                </label>
                                 <input
                                     type="number"
                                     className="form-input form-input-lg"
@@ -182,8 +243,14 @@ export default function SettleUpModal({ onClose, preselectedFriendId = null, pre
                                     onChange={e => setAmount(e.target.value)}
                                     placeholder="0"
                                     min="0"
+                                    max={Math.abs(selectedBalance)}
                                     autoFocus
                                 />
+                                {parseFloat(amount) > Math.abs(selectedBalance) && (
+                                    <p style={{ color: 'var(--negative)', fontSize: '0.8rem', marginTop: '4px' }}>
+                                        Amount exceeds balance of {formatINR(Math.abs(selectedBalance))}
+                                    </p>
+                                )}
                             </div>
 
                             <div className="form-group">
@@ -239,8 +306,8 @@ export default function SettleUpModal({ onClose, preselectedFriendId = null, pre
                         <button
                             className="btn btn-primary flex-1"
                             onClick={handleSettle}
-                            disabled={!amount || parseFloat(amount) <= 0}
-                            style={(!amount || parseFloat(amount) <= 0)? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+                            disabled={!amount || parseFloat(amount) <= 0 || parseFloat(amount) > Math.abs(selectedBalance)}
+                            style={(!amount || parseFloat(amount) <= 0 || parseFloat(amount) > Math.abs(selectedBalance))? { opacity: 0.5, cursor: 'not-allowed' } : {}}
                         >
                             <Check size={18} />
                             Record Payment

@@ -5,13 +5,14 @@ import { useApp } from '../context/AppContext';
 import { formatINR } from '../utils/currency';
 import { getInitials, getAvatarColor } from '../utils/helpers';
 import ExpenseCard from '../components/ExpenseCard';
+import SettlementCard from '../components/SettlementCard';
 import AddExpenseModal from '../components/AddExpenseModal';
 import SettleUpModal from '../components/SettleUpModal';
 
 export default function GroupDetail() {
     const { id } = useParams();
     const navigate = useNavigate();
-    const { getGroupById, getExpensesByGroup, getGroupBalanceDetails, getGroupSimplifiedDebts, getUserById, currentUser, friends, addMemberToGroup, deleteGroup, deleteExpense } = useApp();
+    const { getGroupById, getExpensesByGroup, getGroupBalanceDetails, getGroupSimplifiedDebts, getUserById, currentUser, friends, addMemberToGroup, deleteGroup, deleteExpense, settlements } = useApp();
 
     const [showAddExpense, setShowAddExpense] = useState(false);
     const [showSettle, setShowSettle] = useState(false);
@@ -38,6 +39,17 @@ export default function GroupDetail() {
     const expenses = getExpensesByGroup(id);
     const memberBalances = getGroupBalanceDetails(id);
     const simplifiedDebts = getGroupSimplifiedDebts(id);
+
+    // Get settlements for this group
+    const groupSettlements = settlements
+        .filter(s => s.groupId === id)
+        .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    // Combine expenses and settlements for display
+    const allTransactions = [
+        ...expenses.map(e => ({ ...e, type: 'expense', sortDate: e.date })),
+        ...groupSettlements.map(s => ({ ...s, type: 'settlement', sortDate: s.date }))
+    ].sort((a, b) => new Date(b.sortDate) - new Date(a.sortDate));
 
     // Total group spend
     const totalSpend = expenses.reduce((sum, e) => sum + e.amount, 0);
@@ -188,21 +200,28 @@ export default function GroupDetail() {
             {/* Expenses Tab */}
             {activeTab === 'expenses' && (
                 <div className="card">
-                    {expenses.length === 0 ? (
+                    {allTransactions.length === 0 ? (
                         <div className="empty-state">
                             <div className="empty-state-icon">
                                 <ReceiptText size={36} />
                             </div>
-                            <h3 className="empty-state-title">No expenses yet</h3>
-                            <p className="empty-state-desc">Add your first expense in this group.</p>
+                            <h3 className="empty-state-title">No activity yet</h3>
+                            <p className="empty-state-desc">Add your first expense or settlement in this group.</p>
                         </div>
                     ) : (
-                        expenses.map(expense => (
-                            <ExpenseCard
-                                key={expense.id}
-                                expense={expense}
-                                onClick={() => handleExpenseClick(expense)}
-                            />
+                        allTransactions.map(transaction => (
+                            transaction.type === 'expense' ? (
+                                <ExpenseCard
+                                    key={transaction.id}
+                                    expense={transaction}
+                                    onClick={() => handleExpenseClick(transaction)}
+                                />
+                            ) : (
+                                <SettlementCard
+                                    key={transaction.id}
+                                    settlement={transaction}
+                                />
+                            )
                         ))
                     )}
                 </div>
