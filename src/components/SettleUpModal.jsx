@@ -348,7 +348,7 @@ export default function SettleUpModal({ onClose, preselectedFriendId = null, pre
                             {/* UPI Payment Button */}
                             {method === 'upi' && (
                                 <button
-                                    className="btn btn-accent"
+                                    className="btn btn-primary"
                                     onClick={openUpiApp}
                                     disabled={!amount || parseFloat(amount) <= 0}
                                     style={{

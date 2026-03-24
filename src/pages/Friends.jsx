@@ -94,8 +94,22 @@ export default function Friends() {
             className="list-item"
             onClick={() => navigate(`/friends/${friend.id}`)}
         >
-            <div className="avatar" style={{ background: getAvatarColor(friend.name) }}>
-                {getInitials(friend.name)}
+            <div
+                className="avatar"
+                style={{
+                    background: friend.avatar ? 'transparent' : getAvatarColor(friend.name),
+                    overflow: friend.avatar ? 'hidden' : 'visible'
+                }}
+            >
+                {friend.avatar ? (
+                    <img
+                        src={friend.avatar}
+                        alt={friend.name}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                ) : (
+                    getInitials(friend.name)
+                )}
             </div>
             <div className="list-item-content">
                 <div className="list-item-title">{friend.name}</div>
@@ -223,87 +237,140 @@ export default function Friends() {
             {/* Invite Friend Modal */}
             {showAdd && (
                 <div className="modal-overlay" onClick={() => setShowAdd(false)}>
-                    <div className="modal-content" onClick={e => e.stopPropagation()}>
+                    <div className="modal-content invite-modal" onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
-                            <h2 className="modal-title">Invite Friend</h2>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <div style={{
+                                    width: 40,
+                                    height: 40,
+                                    borderRadius: '50%',
+                                    background: 'var(--primary-bg)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: 'var(--primary)'
+                                }}>
+                                    <UserPlus size={20} />
+                                </div>
+                                <h2 className="modal-title">Invite Friend</h2>
+                            </div>
                             <button className="modal-close" onClick={() => setShowAdd(false)}>
                                 <X size={20} />
                             </button>
                         </div>
                         <div className="modal-body">
                             {!inviteLink ? (
-                                <div style={{ textAlign: 'center', padding: '24px 0' }}>
+                                <div style={{ textAlign: 'center', padding: '16px 0' }}>
                                     <div style={{
-                                        width: 64,
-                                        height: 64,
+                                        width: 80,
+                                        height: 80,
                                         borderRadius: '50%',
-                                        background: 'var(--primary-bg)',
+                                        background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)',
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
-                                        margin: '0 auto 16px'
+                                        margin: '0 auto 20px',
+                                        boxShadow: '0 8px 30px rgba(255, 138, 101, 0.3)'
                                     }}>
-                                        <LinkIcon size={32} style={{ color: 'var(--primary)' }} />
+                                        <LinkIcon size={36} style={{ color: 'white' }} />
                                     </div>
-                                    <p style={{ color: 'var(--text-secondary)', marginBottom: 24 }}>
+                                    <h3 style={{
+                                        fontFamily: 'var(--font-display)',
+                                        fontWeight: 600,
+                                        fontSize: '1.2rem',
+                                        color: 'var(--text-primary)',
+                                        marginBottom: '8px'
+                                    }}>Invite your friends</h3>
+                                    <p style={{ color: 'var(--text-secondary)', marginBottom: 24, lineHeight: 1.5 }}>
                                         Generate a unique invite link to share with friends. They can use it to join and automatically connect with you.
                                     </p>
                                     <button
-                                        className="btn btn-primary"
+                                        className="btn btn-primary btn-full"
                                         onClick={generateInviteLink}
                                         disabled={generatingLink}
-                                        style={{ minWidth: 200 }}
+                                        style={{ padding: '14px 24px' }}
                                     >
-                                        {generatingLink ? 'Generating...' : (
-                                            <><LinkIcon size={18} style={{ marginRight: 8 }} /> Generate Invite Link</>
+                                        {generatingLink ? (
+                                            <>
+                                                <span className="spinner" style={{ width: 18, height: 18, borderWidth: 2, display: 'inline-block', marginRight: 8, verticalAlign: 'middle', marginBottom: 0 }} />
+                                                <span style={{ verticalAlign: 'middle' }}>Generating...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <LinkIcon size={18} style={{ display: 'inline-block', marginRight: 8, verticalAlign: 'middle' }} />
+                                                <span style={{ verticalAlign: 'middle' }}>Generate Invite Link</span>
+                                            </>
                                         )}
                                     </button>
                                 </div>
                             ) : (
                                 <div>
-                                    <p style={{ color: 'var(--text-secondary)', marginBottom: 16 }}>
-                                        Share this link with your friend. When they sign up or log in using this link, you&apos;ll be automatically connected.
-                                    </p>
+                                    <div style={{
+                                        padding: '16px',
+                                        background: 'var(--bg-tertiary)',
+                                        borderRadius: '12px',
+                                        marginBottom: '20px'
+                                    }}>
+                                        <p style={{ color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
+                                            Share this link with your friend. When they sign up or log in using this link, you&apos;ll be automatically connected.
+                                        </p>
+                                    </div>
+
+                                    <label style={{
+                                        display: 'block',
+                                        fontSize: '0.75rem',
+                                        fontWeight: 600,
+                                        color: 'var(--text-tertiary)',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.5px',
+                                        marginBottom: '8px'
+                                    }}>Invite Link</label>
                                     <div style={{
                                         display: 'flex',
                                         gap: 8,
-                                        marginBottom: 16
+                                        marginBottom: 20
                                     }}>
                                         <input
                                             type="text"
                                             className="form-input"
                                             value={inviteLink}
                                             readOnly
-                                            style={{ flex: 1, fontSize: '0.85rem' }}
+                                            style={{
+                                                flex: 1,
+                                                fontSize: '0.8rem',
+                                                background: 'var(--bg-tertiary)',
+                                                border: '1px solid var(--border)'
+                                            }}
                                         />
                                         <button
-                                            className="btn btn-secondary"
+                                            className="btn btn-primary"
                                             onClick={copyToClipboard}
-                                            style={{ padding: '8px 16px' }}
+                                            style={{ padding: '10px 16px' }}
                                         >
                                             {linkCopied ? <Check size={18} /> : <Copy size={18} />}
                                         </button>
                                     </div>
-                                    <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+
+                                    <div style={{ display: 'flex', gap: 12 }}>
                                         <button
-                                            className="btn btn-secondary"
+                                            className="btn btn-primary flex-1"
                                             onClick={shareInvite}
-                                            style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+                                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
                                         >
-                                            <Share2 size={16} /> Share
+                                            <Share2 size={18} /> Share
                                         </button>
                                         <button
-                                            className="btn btn-secondary"
+                                            className="btn btn-secondary flex-1"
                                             onClick={() => setInviteLink('')}
                                         >
-                                            Generate New
+                                            <LinkIcon size={18} /> New Link
                                         </button>
                                     </div>
                                 </div>
                             )}
                         </div>
                         <div className="modal-footer">
-                            <button className="btn btn-secondary flex-1" onClick={() => {
+                            <button className="btn btn-secondary btn-full" onClick={() => {
                                 setShowAdd(false);
                                 setInviteLink('');
                                 setLinkCopied(false);

@@ -22,7 +22,6 @@ export default function Login() {
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [submitting, setSubmitting] = useState(false);
-    const [focusedField, setFocusedField] = useState(null);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -69,11 +68,11 @@ export default function Login() {
                 {/* Logo */}
                 <div className="auth-logo">
                     <div className="auth-logo-icon">
-                        <IndianRupee size={36} strokeWidth={2.5} />
+                        <IndianRupee size={40} strokeWidth={2.5} />
                     </div>
                     <h1 className="auth-app-name">NammaSplit</h1>
                     <p className="auth-tagline">
-                        Split expenses, the desi way <span>🇮🇳</span>
+                        Split expenses, the desi way
                     </p>
                 </div>
 
@@ -105,15 +104,10 @@ export default function Login() {
                                 className="form-input"
                                 value={name}
                                 onChange={e => setName(e.target.value)}
-                                onFocus={() => setFocusedField('name')}
-                                onBlur={() => setFocusedField(null)}
                                 placeholder="e.g., Arjun Sharma"
                                 autoComplete="name"
                                 required={isSignup}
                                 minLength={3}
-                                style={{
-                                    borderColor: focusedField === 'name' ? 'var(--primary)' : undefined
-                                }}
                             />
                         </div>
                     )}
@@ -125,14 +119,9 @@ export default function Login() {
                             className="form-input"
                             value={email}
                             onChange={e => setEmail(e.target.value)}
-                            onFocus={() => setFocusedField('email')}
-                            onBlur={() => setFocusedField(null)}
                             placeholder="you@email.com"
                             required
                             autoComplete="email"
-                            style={{
-                                borderColor: focusedField === 'email' ? 'var(--primary)' : undefined
-                            }}
                         />
                     </div>
 
@@ -144,16 +133,11 @@ export default function Login() {
                                 className="form-input"
                                 value={password}
                                 onChange={e => setPassword(e.target.value)}
-                                onFocus={() => setFocusedField('password')}
-                                onBlur={() => setFocusedField(null)}
                                 placeholder={isSignup ? 'Create a password (min 6 chars)' : 'Enter your password'}
                                 required
                                 minLength={6}
                                 autoComplete={isSignup ? 'new-password' : 'current-password'}
-                                style={{
-                                    paddingRight: 48,
-                                    borderColor: focusedField === 'password' ? 'var(--primary)' : undefined
-                                }}
+                                style={{ paddingRight: 48 }}
                             />
                             <button
                                 type="button"
@@ -176,7 +160,7 @@ export default function Login() {
                                 }}
                                 aria-label={showPassword ? 'Hide password' : 'Show password'}
                             >
-                                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                             </button>
                         </div>
                     </div>
@@ -189,6 +173,7 @@ export default function Login() {
                         type="submit"
                         className="btn btn-primary auth-submit"
                         disabled={submitting || !email || !password || (isSignup && !name.trim())}
+                        style={{ width: '100%', justifyContent: 'center' }}
                     >
                         {submitting ? (
                             <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

@@ -77,18 +77,18 @@ export function generateId() {
  * Expense categories with icons (using lucide icon names)
  */
 export const CATEGORIES = [
-    { id: 'food', label: 'Food & Dining', icon: 'UtensilsCrossed', color: '#FF6B35' },
-    { id: 'drinks', label: 'Drinks', icon: 'Coffee', color: '#8D6E63' },
-    { id: 'groceries', label: 'Groceries', icon: 'ShoppingCart', color: '#43A047' },
-    { id: 'transport', label: 'Transport', icon: 'Car', color: '#1E88E5' },
-    { id: 'rent', label: 'Rent', icon: 'Home', color: '#7CB342' },
-    { id: 'bills', label: 'Bills & Utilities', icon: 'Zap', color: '#FFB300' },
-    { id: 'entertainment', label: 'Entertainment', icon: 'Film', color: '#E91E63' },
-    { id: 'shopping', label: 'Shopping', icon: 'ShoppingBag', color: '#9C27B0' },
-    { id: 'travel', label: 'Travel', icon: 'Plane', color: '#00ACC1' },
-    { id: 'medical', label: 'Medical', icon: 'Heart', color: '#EF5350' },
-    { id: 'education', label: 'Education', icon: 'GraduationCap', color: '#5E35B1' },
-    { id: 'other', label: 'Other', icon: 'MoreHorizontal', color: '#78909C' },
+    { id: 'food', label: 'Food & Dining', icon: '🍽️', color: '#FF6B35' },
+    { id: 'drinks', label: 'Drinks', icon: '☕', color: '#8D6E63' },
+    { id: 'groceries', label: 'Groceries', icon: '🛒', color: '#43A047' },
+    { id: 'transport', label: 'Transport', icon: '🚗', color: '#1E88E5' },
+    { id: 'rent', label: 'Rent', icon: '🏠', color: '#7CB342' },
+    { id: 'bills', label: 'Bills & Utilities', icon: '⚡', color: '#FFB300' },
+    { id: 'entertainment', label: 'Entertainment', icon: '🎬', color: '#E91E63' },
+    { id: 'shopping', label: 'Shopping', icon: '🛍️', color: '#9C27B0' },
+    { id: 'travel', label: 'Travel', icon: '✈️', color: '#00ACC1' },
+    { id: 'medical', label: 'Medical', icon: '🏥', color: '#EF5350' },
+    { id: 'education', label: 'Education', icon: '📚', color: '#5E35B1' },
+    { id: 'other', label: 'Other', icon: '📦', color: '#78909C' },
 ];
 
 export function getCategoryById(id) {

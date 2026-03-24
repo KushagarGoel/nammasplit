@@ -10,12 +10,13 @@ export function createUser({ name, email, avatar = null }) {
     };
 }
 
-export function createGroup({ name, members = [], createdBy }) {
+export function createGroup({ name, members = [], createdBy, avatar = null }) {
     return {
         id: generateId(),
         name,
         members, // array of user IDs
         createdBy,
+        avatar, // emoji/icon for group
         createdAt: new Date().toISOString(),
     };
 }

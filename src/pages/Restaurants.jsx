@@ -335,6 +335,13 @@ export default function Restaurants() {
 
     return (
         <div className="page-content restaurants-page">
+            {/* Page Header */}
+            <div className="page-header">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h1 className="page-title">Restaurants</h1>
+                </div>
+            </div>
+
             {/* Active Sessions Section */}
             {activeSessions.length > 0 && (
                 <div className="section">
@@ -572,8 +579,9 @@ export default function Restaurants() {
                                     <button
                                         className="restaurant-action-btn-v2 danger"
                                         onClick={() => setDeleteModal({ show: true, restaurant })}
+                                        style={{ minWidth: '44px', minHeight: '44px' }}
                                     >
-                                        <Trash2 size={16} />
+                                        <Trash2 size={20} />
                                     </button>
                                 </div>
                             </div>
@@ -658,29 +666,29 @@ export default function Restaurants() {
             {/* Stop Session Modal */}
             {stopSessionModal.show && (
                 <div className="modal-overlay" onClick={() => setStopSessionModal({ show: false, session: null })}>
-                    <div className="modal-content modal-sm modal-padded" onClick={(e) => e.stopPropagation()}>
+                    <div className="modal-content modal-sm" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <CheckCircle size={24} className="modal-icon success" />
                             <h3>End Session</h3>
                         </div>
-                        <div className="modal-body-content">
-                            <p className="modal-body">
+                        <div className="modal-body">
+                            <p style={{ margin: 0, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
                                 Are you sure you want to end the session for <strong>{stopSessionModal.session?.restaurantName}</strong>?
                                 Participants will no longer be able to add items.
                             </p>
                         </div>
-                        <div className="modal-actions">
+                        <div className="modal-footer">
                             <button
-                                className="btn btn-outline"
+                                className="btn btn-secondary flex-1"
                                 onClick={() => handleEndSession(false)}
                             >
                                 End
                             </button>
                             <button
-                                className="btn btn-primary"
+                                className="btn btn-primary flex-1"
                                 onClick={() => handleEndSession(true)}
                             >
-                                <Receipt size={16} /> End & Add Expense
+                                End & Add Expense
                             </button>
                         </div>
                     </div>
@@ -906,14 +914,23 @@ export default function Restaurants() {
                             </p>
 
                             {/* Friend Search */}
-                            <div className="search-bar" style={{ marginBottom: 16 }}>
-                                <Search size={18} className="search-icon" />
+                            <div style={{ position: 'relative', marginBottom: 16 }}>
+                                <Search size={18} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)', pointerEvents: 'none' }} />
                                 <input
                                     type="text"
                                     placeholder="Search friends..."
                                     value={friendSearch}
                                     onChange={(e) => setFriendSearch(e.target.value)}
-                                    className="search-input"
+                                    style={{
+                                        width: '100%',
+                                        padding: '12px 16px 12px 44px',
+                                        border: '1.5px solid var(--border)',
+                                        borderRadius: 'var(--radius-md)',
+                                        background: 'var(--bg-secondary)',
+                                        color: 'var(--text-primary)',
+                                        fontSize: '0.95rem',
+                                        outline: 'none'
+                                    }}
                                 />
                             </div>
 
@@ -1009,8 +1026,7 @@ export default function Restaurants() {
                                 onClick={() => createSession(friendSelectionModal.restaurant, friendSelectionModal.selectedFriends)}
                                 disabled={!friendSelectionModal.restaurant}
                             >
-                                <ShoppingBag size={16} />
-                                Create Session {friendSelectionModal.selectedFriends.length > 0 && `(${friendSelectionModal.selectedFriends.length + 1} participants)`}
+                                Create Session
                             </button>
                         </div>
                     </div>

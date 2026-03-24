@@ -445,12 +445,13 @@ export function AppProvider({ children }) {
         showToast(`Settled ${formatINR(totalSettled)} with ${fromUser.id === currentUser.id ? toUser.name : fromUser.name}`);
     }, [getUserById, currentUser, showToast, getFriendBalanceBreakdown]);
 
-    const addGroup = useCallback(async (name, memberIds) => {
+    const addGroup = useCallback(async (name, memberIds, avatar = null) => {
         const allMembers = [currentUser.id, ...memberIds];
         const group = createGroup({
             name,
             members: allMembers,
             createdBy: currentUser.id,
+            avatar,
         });
 
         // Create friend links between all group members (full mesh)
@@ -646,6 +647,7 @@ export function AppProvider({ children }) {
         balances,
         totalBalances,
         friendBalances,
+        userProfile,
 
         // Getters
         getUserById,
@@ -683,6 +685,13 @@ export function AppProvider({ children }) {
             await saveActivity(activity);
 
             showToast(`Renamed to "${newName.trim()}"`);
+        },
+
+        editGroupAvatar: async (groupId, newAvatar) => {
+            const group = data.groups.find(g => g.id === groupId);
+            if (!group) return;
+            await updateGroup(groupId, { avatar: newAvatar });
+            showToast('Group icon updated');
         },
 
         // UI

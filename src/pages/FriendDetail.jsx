@@ -64,17 +64,37 @@ export default function FriendDetail() {
 
     return (
         <div>
-            <button className="back-btn" onClick={() => navigate('/friends')}>
-                <ArrowLeft size={18} /> Friends
-            </button>
+            {/* Header with back button */}
+            <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 'var(--space-lg)'
+            }}>
+                <button className="back-btn" onClick={() => navigate('/friends')}>
+                    <ArrowLeft size={20} />
+                </button>
+            </div>
 
             {/* Friend Header */}
             <div style={{ textAlign: 'center', marginBottom: 'var(--space-lg)' }}>
-                <div className="avatar avatar-xl" style={{
-                    background: getAvatarColor(friend.name),
-                    margin: '0 auto var(--space-md)',
-                }}>
-                    {getInitials(friend.name)}
+                <div
+                    className="avatar avatar-xl"
+                    style={{
+                        background: friend.avatar ? 'transparent' : getAvatarColor(friend.name),
+                        margin: '0 auto var(--space-md)',
+                        overflow: friend.avatar ? 'hidden' : 'visible'
+                    }}
+                >
+                    {friend.avatar ? (
+                        <img
+                            src={friend.avatar}
+                            alt={friend.name}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                    ) : (
+                        getInitials(friend.name)
+                    )}
                 </div>
                 <h1 style={{
                     fontFamily: 'var(--font-display)',
@@ -152,7 +172,8 @@ export default function FriendDetail() {
                 <button className="btn btn-primary flex-1" onClick={() => setShowAddExpense(true)}>
                     <Plus size={18} /> Add Expense
                 </button>
-                {Math.abs(balance) > 0.5 && (
+                {/* Only show Settle Up when user owes friend (balance < 0), not when friend owes user */}
+                {balance < -0.5 && (
                     <button className="btn btn-accent flex-1" onClick={() => setShowSettle(true)}>
                         <HandCoins size={18} /> Settle Up
                     </button>

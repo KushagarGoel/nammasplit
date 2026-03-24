@@ -1,4 +1,3 @@
-import * as Icons from 'lucide-react';
 import { getCategoryById } from '../utils/helpers';
 import { formatINR } from '../utils/currency';
 import { formatDate } from '../utils/helpers';
@@ -8,7 +7,6 @@ export default function ExpenseCard({ expense, onClick }) {
     const { currentUser, getUserById } = useApp();
     const category = getCategoryById(expense.category);
     const payer = getUserById(expense.paidBy);
-    const IconComponent = Icons[category.icon] || Icons.MoreHorizontal;
 
     // Calculate what currentUser owes/lent for this expense
     const currentUserSplit = expense.splits.find(s => s.userId === currentUser.id);
@@ -33,7 +31,7 @@ export default function ExpenseCard({ expense, onClick }) {
     return (
         <div className="expense-card" onClick={onClick} style={{ position: 'relative', cursor: 'pointer' }}>
             <div className="expense-icon" style={{ background: category.color }}>
-                <IconComponent size={20} />
+                <span style={{ fontSize: '1.2rem' }}>{category.icon}</span>
             </div>
             <div className="expense-info">
                 <div className="expense-desc">{expense.description}</div>

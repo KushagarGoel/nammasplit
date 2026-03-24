@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { X, Check, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { getInitials, getAvatarColor } from '../utils/helpers';
+import { getInitials, getAvatarColor, getCategoryById } from '../utils/helpers';
 import CategoryPicker from './CategoryPicker';
 
 const SPLIT_TYPES = [
@@ -462,7 +462,10 @@ export default function AddExpenseModal({ onClose, preselectedGroupId = null, pr
                                     onClick={() => setShowCategoryPicker(!showCategoryPicker)}
                                     style={{ textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
                                 >
-                                    <span>{category.charAt(0).toUpperCase() + category.slice(1)}</span>
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <span style={{ fontSize: '1.2rem' }}>{getCategoryById(category).icon}</span>
+                                        {getCategoryById(category).label}
+                                    </span>
                                     <ChevronDown size={16} />
                                 </button>
                                 {showCategoryPicker && (

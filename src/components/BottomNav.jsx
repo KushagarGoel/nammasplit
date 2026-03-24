@@ -1,15 +1,15 @@
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, UserPlus, Activity, Plus } from 'lucide-react';
+import { Users, UserPlus, Activity, Plus, User } from 'lucide-react';
 import { useState } from 'react';
 import AddExpenseModal from './AddExpenseModal';
 import { useApp } from '../context/AppContext';
 
 const NAV_ITEMS = [
-    { path: '/', label: 'Dashboard', icon: LayoutDashboard },
-    { path: '/groups', label: 'Groups', icon: Users },
-    { path: 'add', label: 'Add', icon: Plus, isAdd: true },
+    { path: '/', label: 'Groups', icon: Users },
     { path: '/friends', label: 'Friends', icon: UserPlus },
+    { path: 'add', label: 'Add', icon: Plus, isAdd: true },
     { path: '/activity', label: 'Activity', icon: Activity },
+    { path: '/account', label: 'Account', icon: User },
 ];
 
 export default function BottomNav() {

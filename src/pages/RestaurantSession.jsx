@@ -41,6 +41,9 @@ export default function RestaurantSession() {
     const [addFriendSearch, setAddFriendSearch] = useState('');
     const [addingFriends, setAddingFriends] = useState(false);
 
+    // Participant details modal
+    const [showParticipantModal, setShowParticipantModal] = useState(false);
+
     const currentUser = {
         id: userProfile?.id || user?.uid,
         name: userProfile?.name || user?.displayName || 'You',
@@ -350,18 +353,25 @@ export default function RestaurantSession() {
                             <div
                                 key={participantId}
                                 className="participant-avatar"
+                                onClick={() => setShowParticipantModal(participantId)}
                                 style={{
                                     backgroundColor: getAvatarColor(participantId),
                                     zIndex: 5 - idx,
+                                    cursor: 'pointer',
                                 }}
-                                title={userName || (participantId === currentUser.id ? 'You' : participantId)}
+                                title={`${userName || (participantId === currentUser.id ? 'You' : participantId)} - Click to see their items`}
                             >
                                 {displayName.length > 3 ? getInitials(displayName) : displayName}
                             </div>
                         );
                     })}
                     {session?.participants?.length > 5 && (
-                        <div className="participant-avatar more">
+                        <div
+                            className="participant-avatar more"
+                            onClick={() => setShowParticipantModal('all')}
+                            style={{ cursor: 'pointer' }}
+                            title="Click to see all participants"
+                        >
                             +{session.participants.length - 5}
                         </div>
                     )}
@@ -682,7 +692,16 @@ export default function RestaurantSession() {
                                     placeholder="Search friends..."
                                     value={addFriendSearch}
                                     onChange={(e) => setAddFriendSearch(e.target.value)}
-                                    className="search-input"
+                                    style={{
+                                        width: '100%',
+                                        padding: '12px 16px 12px 44px',
+                                        border: '1.5px solid var(--border)',
+                                        borderRadius: 'var(--radius-md)',
+                                        background: 'var(--bg-secondary)',
+                                        color: 'var(--text-primary)',
+                                        fontSize: '0.95rem',
+                                        outline: 'none'
+                                    }}
                                 />
                             </div>
 
@@ -780,6 +799,175 @@ export default function RestaurantSession() {
                                 {addingFriends ? 'Adding...' : (
                                     <><UserPlus size={16} /> Add {selectedFriendsToAdd.length > 0 && `(${selectedFriendsToAdd.length})`}</>
                                 )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Participant Items Modal */}
+            {showParticipantModal && (
+                <div className="modal-overlay" onClick={() => setShowParticipantModal(false)}>
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h3 className="modal-title">
+                                {showParticipantModal === 'all'
+                                    ? 'All Participants'
+                                    : `${(() => {
+                                        const profile = participantProfiles[showParticipantModal];
+                                        const friendProfile = friends.find(f => f.id === showParticipantModal);
+                                        return profile?.name || friendProfile?.name || (showParticipantModal === currentUser.id ? 'You' : showParticipantModal.slice(0, 8));
+                                    })()}'s Order`}
+                            </h3>
+                            <button className="modal-close" onClick={() => setShowParticipantModal(false)}>
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <div className="modal-body">
+                            {showParticipantModal === 'all' ? (
+                                // Show all participants and their items
+                                <div className="participant-list">
+                                    {session?.participants?.map(participantId => {
+                                        const profile = participantProfiles[participantId];
+                                        const friendProfile = friends.find(f => f.id === participantId);
+                                        const userName = profile?.name || friendProfile?.name;
+                                        const displayName = participantId === currentUser.id ? 'You' : (userName || participantId.slice(0, 8));
+                                        const userItems = cartItems.filter(item => item.userId === participantId);
+
+                                        if (userItems.length === 0) return null;
+
+                                        return (
+                                            <div key={participantId} className="participant-order-section" style={{ marginBottom: 24 }}>
+                                                <div className="participant-header" style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: 12,
+                                                    marginBottom: 12,
+                                                    paddingBottom: 8,
+                                                    borderBottom: '1px solid var(--border)'
+                                                }}>
+                                                    <div
+                                                        className="avatar"
+                                                        style={{
+                                                            backgroundColor: getAvatarColor(participantId),
+                                                            width: 36,
+                                                            height: 36,
+                                                            borderRadius: '50%',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            color: 'white',
+                                                            fontWeight: 600,
+                                                            fontSize: '0.85rem',
+                                                        }}
+                                                    >
+                                                        {displayName.length > 3 ? getInitials(displayName) : displayName}
+                                                    </div>
+                                                    <span style={{ fontWeight: 600 }}>{displayName}</span>
+                                                    <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                                                        ({userItems.reduce((sum, item) => sum + item.quantity, 0)} items)
+                                                    </span>
+                                                </div>
+                                                <div className="participant-items">
+                                                    {userItems.map(item => (
+                                                        <div key={item.id} className="participant-item" style={{
+                                                            display: 'flex',
+                                                            justifyContent: 'space-between',
+                                                            padding: '8px 0',
+                                                            borderBottom: '1px solid var(--divider)'
+                                                        }}>
+                                                            <div>
+                                                                <div style={{ fontWeight: 500 }}>{item.menuItemName}</div>
+                                                                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                                                    {formatINR(item.price)} × {item.quantity}
+                                                                </div>
+                                                            </div>
+                                                            <div style={{ fontWeight: 600 }}>
+                                                                {formatINR(item.price * item.quantity)}
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            ) : (
+                                // Show specific participant's items
+                                (() => {
+                                    const participantId = showParticipantModal;
+                                    const profile = participantProfiles[participantId];
+                                    const friendProfile = friends.find(f => f.id === participantId);
+                                    const userName = profile?.name || friendProfile?.name;
+                                    const displayName = participantId === currentUser.id ? 'You' : (userName || participantId.slice(0, 8));
+                                    const userItems = cartItems.filter(item => item.userId === participantId);
+
+                                    if (userItems.length === 0) {
+                                        return (
+                                            <div className="empty-state" style={{ padding: '32px 0' }}>
+                                                <ShoppingCart size={48} style={{ color: 'var(--text-tertiary)', marginBottom: 16 }} />
+                                                <p style={{ color: 'var(--text-secondary)' }}>
+                                                    {displayName} hasn't added any items yet
+                                                </p>
+                                            </div>
+                                        );
+                                    }
+
+                                    return (
+                                        <div className="participant-items">
+                                            {userItems.map(item => (
+                                                <div key={item.id} className="participant-item" style={{
+                                                    display: 'flex',
+                                                    justifyContent: 'space-between',
+                                                    padding: '12px 0',
+                                                    borderBottom: '1px solid var(--divider)'
+                                                }}>
+                                                    <div style={{ flex: 1 }}>
+                                                        <div style={{ fontWeight: 600, marginBottom: 4 }}>{item.menuItemName}</div>
+                                                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                                            {formatINR(item.price)} each
+                                                        </div>
+                                                        {item.specialInstructions && (
+                                                            <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', marginTop: 4, fontStyle: 'italic' }}>
+                                                                Note: {item.specialInstructions}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div style={{ textAlign: 'right' }}>
+                                                        <div style={{ fontWeight: 700, color: 'var(--primary)' }}>
+                                                            {formatINR(item.price * item.quantity)}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                                            × {item.quantity}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            <div style={{
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                padding: '16px 0',
+                                                marginTop: 8,
+                                                borderTop: '2px solid var(--border)',
+                                                fontWeight: 700,
+                                                fontSize: '1.1rem'
+                                            }}>
+                                                <span>Total</span>
+                                                <span>{formatINR(userItems.reduce((sum, item) => sum + item.price * item.quantity, 0))}</span>
+                                            </div>
+                                        </div>
+                                    );
+                                })()
+                            )}
+                        </div>
+
+                        <div className="modal-footer">
+                            <button
+                                className="btn btn-primary btn-full"
+                                onClick={() => setShowParticipantModal(false)}
+                            >
+                                Close
                             </button>
                         </div>
                     </div>

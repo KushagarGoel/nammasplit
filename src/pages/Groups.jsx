@@ -5,12 +5,20 @@ import { useApp } from '../context/AppContext';
 import { getInitials, getAvatarColor } from '../utils/helpers';
 import { formatINR } from '../utils/currency';
 
+const GROUP_AVATARS = [
+    '👥', '🏖️', '🏠', '🍱', '✈️', '🚗', '🎉', '🎮', '📸', '☕',
+    '💼', '🏢', '🏟️', '🎬', '🎵', '🏋️', '🚴', '🏕️', '🏊', '⛷️',
+    '🎨', '📚', '💡', '🛒', '🎁', '🌮', '🍕', '🍔', '🥗', '🍜',
+    '⚽', '🏏', '🎾', '🏸', '🎳', '🎯', '🎲', '🃏', '🎰', '🎸'
+];
+
 export default function Groups() {
     const { groups, friends, currentUser, addGroup, getGroupBalanceDetails, getUserById, showToast } = useApp();
     const navigate = useNavigate();
     const [showCreate, setShowCreate] = useState(false);
     const [newName, setNewName] = useState('');
     const [selectedMembers, setSelectedMembers] = useState([]);
+    const [selectedAvatar, setSelectedAvatar] = useState('👥');
 
     const [friendSearch, setFriendSearch] = useState('');
 
@@ -28,12 +36,13 @@ export default function Groups() {
     );
 
     const handleCreateGroup = async () => {
-        console.log('Creating group with name:', newName, 'and members:', selectedMembers);
+        console.log('Creating group with name:', newName, 'and members:', selectedMembers, 'avatar:', selectedAvatar);
         if (!newName.trim() || selectedMembers.length === 0) return;
-        const group = await addGroup(newName.trim(), selectedMembers);
+        const group = await addGroup(newName.trim(), selectedMembers, selectedAvatar);
         setShowCreate(false);
         setNewName('');
         setSelectedMembers([]);
+        setSelectedAvatar('👥');
         navigate(`/groups/${group.id}`);
     };
 
@@ -93,9 +102,9 @@ export default function Groups() {
                                         width: 52, height: 52, borderRadius: 'var(--radius-lg)',
                                         background: 'linear-gradient(135deg, var(--primary), var(--accent))',
                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        fontSize: '1.4rem', flexShrink: 0,
+                                        fontSize: '1.6rem', flexShrink: 0,
                                     }}>
-                                        {group.name.includes('🏖️') ? '🏖️' : group.name.includes('🏠') ? '🏠' : group.name.includes('🍱') ? '🍱' : '👥'}
+                                        {group.avatar || '👥'}
                                     </div>
                                     <div style={{ flex: 1 }}>
                                         <div className="list-item-title" style={{ fontSize: '1.05rem' }}>{group.name}</div>
@@ -158,6 +167,42 @@ export default function Groups() {
                                     placeholder="e.g., Weekend Trip 🎉"
                                     autoFocus
                                 />
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label">Group icon</label>
+                                <div className="avatar-grid" style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(8, 1fr)',
+                                    gap: '8px',
+                                    padding: '8px',
+                                    background: 'var(--bg-secondary)',
+                                    borderRadius: 'var(--radius-md)',
+                                    maxHeight: '140px',
+                                    overflowY: 'auto'
+                                }}>
+                                    {GROUP_AVATARS.map(avatar => (
+                                        <button
+                                            key={avatar}
+                                            type="button"
+                                            onClick={() => setSelectedAvatar(avatar)}
+                                            style={{
+                                                width: '36px',
+                                                height: '36px',
+                                                borderRadius: 'var(--radius-md)',
+                                                border: selectedAvatar === avatar ? '2px solid var(--primary)' : '2px solid transparent',
+                                                background: selectedAvatar === avatar ? 'var(--primary-100)' : 'var(--bg-tertiary)',
+                                                fontSize: '1.2rem',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                transition: 'all 0.15s ease'
+                                            }}
+                                        >
+                                            {avatar}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
                             <div className="form-group">
                                 <label className="form-label">Add members</label>
