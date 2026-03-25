@@ -101,7 +101,7 @@ export default function Dashboard() {
                         {hasBalance ? (isOwed ? "YOU'RE OWED" : "YOU OWE") : "ALL SETTLED UP"}
                     </div>
                     <div className="balance-card-amount">
-                        {hasBalance ? `${isOwed ? '+' : ''}${formatINR(Math.abs(totalBalances.totalBalance))}` : '₹0'}
+                        {hasBalance ? `${formatINR(Math.abs(totalBalances.totalBalance))}` : '₹0'}
                     </div>
                     <div className="balance-card-subtitle">
                         {hasBalance
