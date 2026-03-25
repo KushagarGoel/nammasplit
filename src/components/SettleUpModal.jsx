@@ -103,7 +103,7 @@ export default function SettleUpModal({ onClose, preselectedFriendId = null, pre
         const payAmount = parseFloat(amount) || 0;
         const note = preselectedGroupId
             ? `Payment for ${groups.find(g => g.id === preselectedGroupId)?.name || 'group'}`
-            : 'Payment via Nammasplit';
+            : 'Payment via Sangam';
 
         // If recipient has UPI ID, include it; otherwise open UPI app without payee
         if (selectedFriend.upiId) {

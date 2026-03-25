@@ -661,8 +661,8 @@ export default function RestaurantSession() {
             {showShareOptions && (
                 <ShareOptions
                     link={`${window.location.origin}/order/${sessionId}`}
-                    title="Join my group order on NammaSplit"
-                    message={`Join my group order at ${restaurant?.name || 'the restaurant'} on NammaSplit! Let's order together and split the bill easily.`}
+                    title="Join my group order on Sangam"
+                    message={`Join my group order at ${restaurant?.name || 'the restaurant'} on Sangam! Let's order together and split the bill easily.`}
                     onClose={() => setShowShareOptions(false)}
                 />
             )}

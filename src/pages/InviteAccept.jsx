@@ -77,7 +77,7 @@ export default function InviteAccept() {
                 <CheckCircle size={64} style={{ color: 'var(--success)', marginBottom: 24 }} />
                 <h2 style={{ marginBottom: 12 }}>Friend Invite</h2>
                 <p style={{ color: 'var(--text-secondary)', marginBottom: 24 }}>
-                    You've been invited to connect on NammaSplit!
+                    You've been invited to connect on Sangam!
                 </p>
 
                 <div style={{

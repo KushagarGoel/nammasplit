@@ -384,8 +384,8 @@ export default function Friends() {
             {showShareOptions && inviteLink && (
                 <ShareOptions
                     link={inviteLink}
-                    title="Join me on NammaSplit"
-                    message={`Connect with me on NammaSplit to split expenses!`}
+                    title="Join me on Sangam"
+                    message={`Connect with me on Sangam to split expenses!`}
                     onClose={() => setShowShareOptions(false)}
                 />
             )}

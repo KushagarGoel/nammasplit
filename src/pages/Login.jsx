@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { IndianRupee, Eye, EyeOff, Check, Shield, Zap, Users } from 'lucide-react';
+import { IndianRupee, Eye, EyeOff, Check, Shield, Zap, Users, Utensils, Wallet } from 'lucide-react';
 
 // Google "G" icon component
 function GoogleIcon({ size = 20 }) {
@@ -59,6 +59,8 @@ export default function Login() {
     const features = [
         { icon: Zap, text: 'Split expenses instantly' },
         { icon: Users, text: 'Manage groups & friends' },
+        { icon: Utensils, text: 'Order together, split the bill' },
+        { icon: Wallet, text: 'Settle up with UPI' },
         { icon: Shield, text: 'Secure & private' },
     ];
 
@@ -70,9 +72,9 @@ export default function Login() {
                     <div className="auth-logo-icon">
                         <IndianRupee size={40} strokeWidth={2.5} />
                     </div>
-                    <h1 className="auth-app-name">NammaSplit</h1>
+                    <h1 className="auth-app-name">Sangam</h1>
                     <p className="auth-tagline">
-                        Split expenses, the desi way
+                        Together, without the math.
                     </p>
                 </div>
 
@@ -229,7 +231,7 @@ export default function Login() {
 
                 {/* Features */}
                 <div className="auth-features">
-                    <p className="auth-features-title">Why NammaSplit?</p>
+                    <p className="auth-features-title">Why Sangam?</p>
                     <div className="auth-features-list">
                         {features.map((feature, index) => (
                             <div key={index} className="auth-feature">
